@@ -133,6 +133,9 @@ test('Zemljevid: live markers, site panel with wind graph only',async({page})=>{
   await page.locator('#site-charts').focus();await page.locator('#site-charts').press('Home');
   await expect(page.locator('#site-reading')).not.toHaveText(latest!);
   await page.locator('#site-close').click();await expect(page.locator('#site')).toBeHidden();
+  // Clicking empty map also closes the panel (clicking a station does not).
+  await peter.dispatchEvent('click');await expect(page.locator('#site')).toBeVisible();
+  await page.mouse.click(30,150);await expect(page.locator('#site')).toBeHidden();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(keys).toContain('history:vetr:peter');
   expect(errors).toEqual([]);

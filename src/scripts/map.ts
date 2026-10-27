@@ -182,7 +182,7 @@ map.addControl({
     const group=document.createElement('div');
     group.className='maplibregl-ctrl maplibregl-ctrl-group';
     group.innerHTML=(Object.keys(layerButtons) as (keyof typeof layerButtons)[]).map(layer=>`<button type="button" data-layer="${layer}" aria-pressed="${layers[layer]}" title="${layerButtons[layer].title}" aria-label="${layerButtons[layer].title}" class="${layers[layer]?'text-blue-600':'text-zinc-400'}">
-      <svg viewBox="0 0 24 24" width="18" height="18" class="mx-auto" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${layerButtons[layer].svg}</svg></button>`).join('');
+      <svg viewBox="0 0 24 24" width="24" height="24" class="mx-auto" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${layerButtons[layer].svg}</svg></button>`).join('');
     group.addEventListener('click',event=>{
       const layer=(event.target as Element).closest<HTMLElement>('[data-layer]')?.dataset.layer as keyof typeof layerButtons|undefined;
       if(layer)setLayer(layer,!layers[layer]);
@@ -241,7 +241,7 @@ function openSite(id:string) {
   if(!station)return;
   if(selected?.id!==id){history=null;selectedTime=null;}
   selected=station;
-  $('site').hidden=false;
+  setPanel(true);
   renderHeader();renderMarkers();
   // Desktop: the map stays as it is. Phones: move the marker above the bottom sheet so it stays visible.
   if(!matchMedia('(min-width: 768px)').matches) {
@@ -253,14 +253,23 @@ function openSite(id:string) {
   // Focus the panel itself (no highlighted button); Tab then reaches the close button.
   $('site').focus({preventScroll:true});
 }
-function closeSite() {
+// Open/close with a slide (up on phones, in from the right on desktop) and fade.
+const closedPanel=['invisible','opacity-0','max-md:translate-y-full','md:translate-x-8'];
+function setPanel(open:boolean) {for(const name of closedPanel)$('site').classList.toggle(name,!open);}
+// returnFocus: when closed from the keyboard, put focus back on the station's marker.
+function closeSite(returnFocus=false) {
   const id=selected?.id;
   selected=null;++historyRequest;
-  $('site').hidden=true;renderMarkers();
-  if(id)markers.get(id)?.getElement()?.focus();
+  setPanel(false);renderMarkers();
+  if(id&&returnFocus)markers.get(id)?.getElement()?.focus({preventScroll:true});
 }
-$('site-close').addEventListener('click',closeSite);
-addEventListener('keydown',event=>{if(event.key==='Escape'&&selected)closeSite();});
+// detail is 0 when the button is activated from the keyboard.
+$('site-close').addEventListener('click',event=>closeSite(event.detail===0));
+// Clicking or tapping empty map closes the panel (not a station, a camera or its popup; drags are not clicks).
+map.on('click',event=>{
+  if(selected&&!(event.originalEvent.target as Element).closest('.maplibregl-marker,.maplibregl-popup'))closeSite();
+});
+addEventListener('keydown',event=>{if(event.key==='Escape'&&selected)closeSite(true);});
 // Reading under the pointer: the sample whose x position on the graph is nearest.
 function sampleAt(clientX:number):number {
   const chart=document.querySelector<SVGSVGElement>('#site-charts svg[data-chart]');
