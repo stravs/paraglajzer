@@ -1,0 +1,41 @@
+{
+  "name": "paraglajzer",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "generate-types": "wrangler types",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "check": "astro check",
+    "deploy": "npm run build && wrangler deploy",
+    "predev": "wrangler types",
+    "prebuild": "wrangler types",
+    "precheck": "wrangler types"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^14.4.2",
+    "@tailwindcss/vite": "^4.3.3",
+    "astro": "^7.4.2",
+    "fast-xml-parser": "^5.11.2",
+    "maplibre-gl": "^6.16.0",
+    "tailwindcss": "^4.3.3",
+    "wrangler": "^4.153.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.5",
+    "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "miniflare": {
+      "undici": "^7.30.1"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+---
+export const prerender=true;
+import Layout from '../layouts/Layout.astro';
+---
+<Layout page="Postaje">
+  <div class="mb-3 flex flex-wrap gap-2">
+    <input id="search" type="search" aria-label="Poišči postajo" placeholder="Poišči postajo" class="min-h-10 min-w-0 flex-1 border border-zinc-300 bg-white px-2" />
+    <select id="source-filter" aria-label="Vir" class="min-h-10 border border-zinc-300 bg-white px-2"><option value="all">Vse postaje</option><option value="favorites">Shranjene</option><option value="vetr">vetr.si</option><option value="skytech">Skytech</option><option value="arso">ARSO</option><option value="luftar">Luftar</option></select>
+    <select id="region-filter" aria-label="Regija" class="min-h-10 max-w-full border border-zinc-300 bg-white px-2"><option value="">Vse regije</option></select>
+  </div>
+  <div id="wind-errors" class="mb-2 text-xs text-amber-800" role="status"></div>
+  <table class="w-full table-fixed border-collapse text-left">
+    <caption id="station-count" class="mb-2 text-left text-xs text-zinc-500">Nalaganje…</caption>
+    <thead class="border-b border-zinc-300 text-xs font-normal text-zinc-500"><tr><th scope="col" class="pb-2 font-normal">Postaja</th><th scope="col" class="w-14 pb-2 text-right font-normal sm:w-20">Veter<br/>m/s</th><th scope="col" class="w-14 pb-2 text-right font-normal sm:w-20">Sunki<br/>m/s</th><th scope="col" class="w-10 pb-2 text-center font-normal sm:w-16">Smer</th><th scope="col" class="w-10 pb-2"><span class="sr-only">Shrani</span></th></tr></thead>
+    <tbody id="stations" aria-busy="true"><tr><td colspan="5" class="py-6 text-zinc-500">Nalaganje…</td></tr></tbody>
+  </table>
+  <script src="../scripts/stations.ts"></script>
+</Layout>
