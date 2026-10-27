@@ -135,6 +135,22 @@ export function parseArso(xml: string): Station[] {
   if (!stations.length) throw new Error('No wind stations');
   return stations;
 }
+// ARSO's national "latest" file only lists stations with data for the current 10-minute slot, so a
+// station whose reading arrives late (Lesce, every 30 min) can be missing for hours. Each station also has
+// its own small latest file (~10 KB) that always holds its newest reading, so those are used instead.
+// These are the ARSO stations in Gorenjska and Kamnik that report wind (checked 2026-10-27).
+export const arsoStations = ['BORST_GOREN-VAS_','KREDA-ICA_','KRVAVEC_','LESCE_','LJUBL-ANA_BRNIK_','PASJA-RAV_','RATECE_','RATIT-VEC_','RUDNO-POL_','VOGEL_'];
+async function loadArso(): Promise<Station[]> {
+  const lists = await Promise.all(arsoStations.map(async id => {
+    try {
+      const response = await fetch(`${ARSO}/uploads/probase/www/observ/surface/text/sl/observationAms_${id}latest.xml`, { headers: { 'User-Agent': 'Paraglajzer/0.1 (shared paragliding weather cache)' }, signal: AbortSignal.timeout(8000) });
+      return response.ok ? parseArso(await response.text()) : [];
+    } catch { return []; } // No wind right now (parseArso throws), or the file failed: skipped this check.
+  }));
+  const stations = lists.flat();
+  if (!stations.length) throw new Error('ARSO unavailable');
+  return stations;
+}
 // History is newest first, in 10-minute steps over 48 h. Only the 6 h before the newest reading are kept.
 export function parseArsoHistory(xml: string): WindSample[] {
   const samples: WindSample[] = [];
@@ -220,7 +236,7 @@ export function sourceFor(key: string, anchor?: string): Source | null {
   if (luftarHistory) return { url:luftarUrl(luftarHistory[1] as keyof typeof luftarStations), interval:600, parse:parseLuftarHistory };
   const arsoHistory = key.match(/^history:arso:([A-Z0-9_-]{1,40})$/);
   if (arsoHistory) return { url:`${ARSO}/uploads/probase/www/observ/surface/text/sl/recent/observationAms_${arsoHistory[1]}history.xml`, interval:600, parse:parseArsoHistory };
-  if (key === 'arso') return { url:`${ARSO}/uploads/probase/www/observ/surface/text/sl/observationAms_si_latest.xml`, interval:600, stations:true, parse:body => gorenjska(parseArso(body)) };
+  if (key === 'arso') return { url:ARSO, interval:600, stations:true, load:async () => gorenjska(await loadArso()) };
   if (key === 'vetr') return { url:'https://vetr.si/', interval:600, stations:true, parse:body => gorenjska(parseVetr(body)) };
   if (key === 'skytech') return { url:'https://skytech.si/skytechsys/data.php', interval:600, init:{method:'POST', body:'c=tabela', headers:{'Content-Type':'application/x-www-form-urlencoded'}}, stations:true, parse:body => gorenjska(parseSkytech(body)) };
   if (key === 'aviation') return { url:`${ARSO}/uploads/probase/www/aviation/fproduct/text/sl/aviation.txt`, interval:600, parse:body => body.replace(/\^/g,'Č').replace(/~/g,'č').replace(/\[/g,'Š').replace(/\{/g,'š').replace(/@/g,'Ž').replace(/`/g,'ž') };

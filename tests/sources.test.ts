@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { inGorenjska } from '../src/lib/gorenjska.ts';
-import { parseVetr, parseSkytech, parseFrames, parseThermals, parseArso, parseArsoHistory, parseLuftarHistory, keepMissing, ljubljanaTime, sourceFor } from '../src/lib/sources.ts';
+import { parseVetr, parseSkytech, parseFrames, parseThermals, parseArso, parseArsoHistory, parseLuftarHistory, keepMissing, arsoStations, ljubljanaTime, sourceFor } from '../src/lib/sources.ts';
 
 test('vetr exposes only normalized weather, not device credentials',()=>{
   const data=[{station:{active:true,name:'test',full_name:'Test',imsi:'secret'},prefsData:{prefs:{send_data_interval_min:'20',phoneNum:'secret'}},windData:{avg:0,max:2,dir:0,timestamp:'2026-10-26T12:00:00+01:00'}}];
@@ -78,4 +78,9 @@ test('station listings keep a missing station while its reading is under 2 h old
   assert.deepEqual(merged.map(s=>[s.id,s.observedAt]),[['a','2026-10-27T09:50:00Z'],['b','2026-10-27T09:30:00Z']]);
   assert.equal(keepMissing([station('a',null)],null,now).length,1);
   assert.equal(keepMissing([],[{...station('far','2026-10-27T09:50:00Z'),location:[46.26,15.74]}],now).length,0);
+});
+test('ARSO stations come from per-station latest files, Lesce included',()=>{
+  assert.ok(arsoStations.includes('LESCE_'));
+  assert.ok(arsoStations.every(id=>/^[A-Z0-9_-]{1,40}$/.test(id)));
+  assert.equal(typeof sourceFor('arso')?.load,'function');
 });

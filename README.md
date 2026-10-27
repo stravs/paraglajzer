@@ -40,7 +40,7 @@ The SQLite-backed `SourceCache` Durable Object is declared and migrated by `wran
 | vetr.si station listing | 10 minutes | Visible map or Postaje page |
 | Station wind history (vetr page / Skytech `c=graf`) | 10 minutes | Opened map site or expanded Sv. Peter row |
 | Skytech station table (POST `c=tabela`) | 10 minutes | Visible map or Postaje page |
-| ARSO automatic stations (`observationAms_si_latest.xml`, wind stations only) | 10 minutes | Visible map or Postaje page |
+| ARSO automatic stations (per-station `observationAms_<id>latest.xml` for the 10 wind stations in Gorenjska and Kamnik) | 10 minutes | Visible map or Postaje page |
 | Luftar stations (Kriška gora, Sebenje/Križe; `luftar.si/data/wsData*HiCharts.json`) | 10 minutes | Visible map or Postaje page |
 | Luftar station wind history (same files) | 10 minutes | Opened Luftar site |
 | ARSO station wind history (`recent/observationAms_<id>history.xml`, last 6 h kept) | 10 minutes | Opened ARSO site |
@@ -65,7 +65,7 @@ All upstream URLs are allowlisted, with canonical cache keys. Model images must 
 
 - **Gorenjska (plus Kamnik) only, for now.** Every station source is filtered in the Worker to the Gorenjska statistical region (OpenStreetMap relation 1699230) plus Kamnik municipality (relation 1675668, for Velika planina and Kamniški vrh), in `src/lib/gorenjska.ts`; other stations never reach the browser, and their history is not served. Forecasts on Napoved still cover all of Slovenia.
 
-- ARSO automatic stations that report wind (about 54, including Kanin, Kredarica, Krvavec, Vogel, Nanos, Slavnik) are on the map, list and search. Their exact degrees are rounded to 8 compass points; their region is the nearest Jadralci forecast region. ARSO XML is read with regexes and history stops after 6 h, to keep Worker CPU low on 0.8–2.5 MB files.
+- ARSO automatic stations that report wind (about 54, including Kanin, Kredarica, Krvavec, Vogel, Nanos, Slavnik) are on the map, list and search. Their exact degrees are rounded to 8 compass points; their region is the nearest Jadralci forecast region. The national ARSO latest file leaves out stations whose reading is late (Lesce reports every 30 min), so each station's own small latest file is used. ARSO XML is read with regexes and history stops after 6 h, to keep Worker CPU low on 0.8–2.5 MB files.
 - Flat, north-up map (MapLibre GL + OpenTopoMap tiles, colour washed out to light grey when zoomed out; no tilt or rotation) with live average wind, gusts and direction per station as slim arrows (pointing where the wind blows, black, red when the average or gusts are over 10 m/s) with an "average / gust" label underneath; stale stations are almost transparent. Where vetr and Skytech have a station with the same site name (and within 5 km), only vetr is shown. vetr gives coordinates; Skytech positions are a local table in `src/lib/sites.ts`: OpenStreetMap paragliding launches/landings where they exist, otherwise the named peak or airfield (2 Skytech stations are not on the map; the offline Skytech Kriška gora is left out everywhere, replaced by Luftar's station). Skytech graphs only give HH:MM, so they are dated from the table's observation time.
 - Luftar (Tržič paragliding club) runs its own stations at Kriška gora and Sebenje/Križe; their Gozd, Potoška gora and Ambrož readings are the Skytech stations already shown. Luftar timestamps are Ljubljana wall-clock time; positions are approximate.
 - Combined vetr/Skytech/ARSO/Luftar station list, source/region/search filters, freshness and exact observation times.
