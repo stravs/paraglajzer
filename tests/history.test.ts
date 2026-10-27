@@ -52,9 +52,11 @@ test('chart widens so every direction arrow is shown',()=>{
   const indexes=[...windCharts(dense,3).matchAll(/data-history-index="(\d+)"/g)].map(m=>Number(m[1]));
   assert.equal(indexes.length,60);
 });
-test('reading spells out direction and matches the plain label',()=>{
+test('reading spells out direction on its own line, with the same values as the plain label',()=>{
   assert.ok(sampleLabel(samples[1]).endsWith('· Sever'));assert.ok(sampleLabel(samples[0]).endsWith('· Severozahod'));
-  assert.equal(sampleReading(samples[1]).replace(/<[^>]+>/g,''),sampleLabel(samples[1]));
+  // Two lines (speeds, then direction) so the panel height never changes with the direction name.
+  const [speeds,direction]=sampleReading(samples[1]).split('\n').map(line=>line.replace(/<[^>]+>/g,'').trim());
+  assert.equal(`${speeds} · ${direction.replace('Smer: ','')}`,sampleLabel(samples[1]));
 });
 test('history endpoints exist per station and share ten-minute caching',()=>{
   assert.equal(sourceFor('history:vetr:peter')?.url,'https://vetr.si/peter');

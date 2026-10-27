@@ -2,18 +2,18 @@
 export const prerender=true;
 import Layout from '../layouts/Layout.astro';
 import { chartRegions } from '../lib/jadralci';
-import { regions,layers } from '../lib/sources';
+import { layers } from '../lib/sources';
 ---
 <Layout page="Napoved">
   <section id="regional-charts" aria-label="Jadralci">
     <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-      <select id="chart-region" aria-label="Regija Jadralci" class="min-h-10 max-w-full border border-zinc-300 bg-white px-2">{Object.entries(chartRegions).map(([id,name])=><option value={id}>{name}</option>)}</select>
+      <select id="chart-region" aria-label="Regija" class="min-h-10 max-w-full border border-zinc-300 bg-white px-2">{Object.entries(chartRegions).map(([id,name])=><option value={id}>{name}</option>)}</select>
       <span id="regional-meta" class="text-xs text-zinc-500" role="status"></span>
     </div>
     <div id="regional-images" class="grid gap-4 md:grid-cols-2" aria-busy="true"></div>
   </section>
   <section class="mt-6 border-t border-zinc-200 pt-4" aria-labelledby="thermal-title">
-    <div class="mb-2 flex items-center justify-between gap-2"><h2 id="thermal-title" class="font-medium">Termika · RSS</h2><select id="thermal-region" aria-label="Regija termike" class="min-h-10 border border-zinc-300 bg-white px-2">{Object.entries(regions).map(([id,name])=><option value={id}>{name}</option>)}</select></div>
+    <h2 id="thermal-title" class="mb-2 font-medium">Termika · <span id="thermal-region-name">Gorenjska</span></h2>
     <div id="thermals" class="text-sm" aria-live="polite"></div><p id="thermal-meta" class="mt-2 text-xs text-zinc-500"></p>
   </section>
   <section id="forecast" class="mt-6 border-t border-zinc-200 pt-4" aria-labelledby="forecast-title">
@@ -25,7 +25,6 @@ import { regions,layers } from '../lib/sources';
   </section>
   <section class="mt-4 border-t border-zinc-200" aria-label="Dodatni podatki ARSO">
     <details id="aviation-detail" class="border-b border-zinc-200 py-3"><summary class="cursor-pointer">Besedilna napoved</summary><pre id="aviation-text" class="mt-3 whitespace-pre-wrap font-mono text-xs leading-6"></pre></details>
-    <details id="sounding-detail" class="border-b border-zinc-200 py-3"><summary class="cursor-pointer">Sondaža · Ljubljana</summary><div id="sounding-image" class="mt-3"></div></details>
     <details id="radar-detail" class="border-b border-zinc-200 py-3"><summary class="cursor-pointer">Radar padavin</summary><div id="radar-image" class="mt-3"></div></details>
     <a class="inline-block py-3 text-xs text-zinc-500 underline" href="https://meteo.arso.gov.si/met/sl/aviation/" target="_blank" rel="noopener noreferrer">ARSO · opozorila in letalstvo</a>
   </section>

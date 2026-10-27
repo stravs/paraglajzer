@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runCandidates, discoverJadralci, regionalCharts, regionalImage, chartRegions, nearestRegion } from '../src/lib/jadralci.ts';
+import { runCandidates, discoverJadralci, regionalCharts, regionalImage, chartRegions, nearestRegion, thermalRegions, thermalRegionFor } from '../src/lib/jadralci.ts';
 
 const at=(time:string)=>Date.parse(time);
 test('Jadralci model switches at 04 and 16 UTC, including midnight rollover',()=>{
@@ -45,4 +45,8 @@ test('sites use the nearest Jadralci region',()=>{
   assert.equal(nearestRegion([46.273,13.473]),'BOV'); // Stol (Kobarid)
   assert.equal(nearestRegion([46.263,15.742]),'PTU'); // Donačka gora
   assert.equal(nearestRegion([45.960,13.720]),'NGO'); // Lijak
+});
+test('every Jadralci region uses one of the 6 ARSO thermal regions',()=>{
+  for(const region of Object.keys(chartRegions) as (keyof typeof chartRegions)[]) assert.ok(Object.hasOwn(thermalRegions,thermalRegionFor[region]),region);
+  assert.equal(thermalRegions[thermalRegionFor.BOV],'Primorska');assert.equal(thermalRegions[thermalRegionFor.LES],'Gorenjska');
 });

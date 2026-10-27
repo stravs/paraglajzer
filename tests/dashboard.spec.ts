@@ -31,18 +31,22 @@ test('concurrent source requests reuse the same global check',async({request})=>
   expect(data[0].nextCheck-data[0].checkedAt).toBeGreaterThanOrEqual(300000);
   expect((await request.get(`${base}/api/source?key=thermal:LJU:extra`)).status()).toBe(404);
 });
-test('Napoved: five regional charts, region switch, refresh, no station fetches',async({page})=>{
+test('Napoved: five regional charts plus the Ljubljana sounding, region switch, refresh, no station fetches',async({page})=>{
   await page.setViewportSize({width:390,height:844});
   const keys:string[]=[],errors:string[]=[];
   page.on('pageerror',error=>errors.push(error.message));
   page.on('request',request=>{const url=new URL(request.url());if(url.pathname==='/api/source')keys.push(url.searchParams.get('key')||'');});
   await page.goto(`${base}/napoved/`);
-  await expect(page.locator('#regional-images img')).toHaveCount(5,{timeout:45000});
+  await expect(page.locator('#regional-images img')).toHaveCount(6,{timeout:45000});
   await expect(page.locator('#regional-meta')).toContainText('UTC');
+  // One region picker on the page; it drives both the charts and the thermal forecast.
+  await expect(page.locator('main select[aria-label="Regija"]')).toHaveCount(1);
+  await expect(page.locator('#thermal-region-name')).toHaveText('Gorenjska');
   await page.selectOption('#chart-region','BOV');
-  await expect(page.locator('#regional-images img')).toHaveCount(5,{timeout:45000});
+  await expect(page.locator('#thermal-region-name')).toHaveText('Primorska');
+  await expect(page.locator('#regional-images img')).toHaveCount(6,{timeout:45000});
   await expect(page.locator('#refresh')).toBeEnabled({timeout:45000});
-  await page.locator('#refresh').click();await expect(page.locator('#regional-images img')).toHaveCount(5);
+  await page.locator('#refresh').click();await expect(page.locator('#regional-images img')).toHaveCount(6);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(keys).not.toContain('vetr');expect(keys).not.toContain('skytech');expect(keys).not.toContain('arso');expect(keys).not.toContain('luftar');expect(keys).not.toContain('stations');
   expect(errors).toEqual([]);

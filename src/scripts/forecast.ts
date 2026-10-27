@@ -1,12 +1,14 @@
 import type { Frame } from '../lib/sources';
-import { regionalCharts,regionalImage,type JadralciRun } from '../lib/jadralci';
+import { regionalCharts,regionalImage,thermalRegionFor,thermalRegions,type JadralciRun } from '../lib/jadralci';
 import { $,escape,date,source,imageSource,startPolling } from './weather';
 
 interface Thermals { issuedAt:string; items:{title:string; text:string; maxLift:number|null}[]; }
 let thermalVersion=0;
 async function loadThermals() {
   const version=++thermalVersion;
-  const region=$<HTMLSelectElement>('thermal-region').value;
+  // The page's one region picker chooses the Jadralci region; thermals use the region it belongs to.
+  const region=thermalRegionFor[$<HTMLSelectElement>('chart-region').value as keyof typeof thermalRegionFor];
+  $('thermal-region-name').textContent=thermalRegions[region];
   $('thermals').textContent='Nalaganje…'; $('thermal-meta').textContent='';
   try {
     const result=await source<Thermals>(`thermal:${region}`);
@@ -16,6 +18,21 @@ async function loadThermals() {
   } catch { if (version===thermalVersion) $('thermals').textContent='Napoved termike ni na voljo.'; }
 }
 
+// The measured Ljubljana sounding sits in the chart grid after the forecast soundings. It updates every
+// 30 min, while the regional charts only change with a new model run, so it refreshes on its own.
+const soundingUrl='https://meteo.arso.gov.si/uploads/probase/www/aviation/observ/upper/graphic/sigps_ljubljana-bezigrad.png';
+async function loadSounding() {
+  const target=document.getElementById('sounding-image');
+  if(!target)return;
+  try {
+    const result=await imageSource('sounding');
+    if(target.dataset.url===result.url)return;
+    const image=new Image();image.src=result.url;image.alt='Sondaža Ljubljana';image.className='h-auto w-full';image.decoding='async';
+    const link=document.createElement('a');link.href=soundingUrl;link.target='_blank';link.rel='noopener noreferrer';link.appendChild(image);
+    target.replaceChildren(link);target.dataset.url=result.url;
+    if(result.stale){const warning=document.createElement('p');warning.textContent='Shranjena slika · napaka vira';warning.className='p-2 text-xs text-amber-700';target.appendChild(warning);}
+  } catch {if(!target.dataset.url)target.textContent='Slika ni na voljo';}
+}
 let chartVersion=0;
 let chartSignature='';
 async function loadRegionalCharts() {
@@ -41,7 +58,14 @@ async function loadRegionalCharts() {
         <a href="${escape(regionalImage(chart.key)!.url)}" target="_blank" rel="noopener noreferrer" class="text-xs text-zinc-500">ARSO ↗</a>
       </figcaption>
       <div id="regional-image-${index}" class="min-h-32 text-xs text-zinc-500">Nalaganje…</div>
-    </figure>`).join('');
+    </figure>`).join('')+`<figure class="min-w-0">
+      <figcaption class="flex flex-wrap items-center justify-between gap-2 py-2 text-xs">
+        <span class="font-semibold">Sondaža · Ljubljana (izmerjena)</span>
+        <a href="${soundingUrl}" target="_blank" rel="noopener noreferrer" class="text-xs text-zinc-500">ARSO ↗</a>
+      </figcaption>
+      <div id="sounding-image" class="min-h-32 text-xs text-zinc-500">Nalaganje…</div>
+    </figure>`;
+    void loadSounding();
     const statuses=await Promise.all(charts.map(async(chart,index)=>{
       try {
         const result=await imageSource(chart.key);
@@ -71,7 +95,7 @@ async function loadRegionalCharts() {
 $('chart-region').addEventListener('change',()=>{
   ++chartVersion; chartSignature='';
   $('regional-images').replaceChildren();
-  void loadRegionalCharts();
+  void loadRegionalCharts();void loadThermals();
 });
 
 let frames:Frame[]=[];
@@ -117,7 +141,6 @@ async function loadFrames() {
     }
   }
 }
-$('thermal-region').addEventListener('change',()=>void loadThermals());
 $('layer').addEventListener('change',()=>{
   ++frameVersion;$('forecast-image').hidden=true;
   $('map-placeholder').hidden=false;$('map-placeholder').textContent='Nalaganje…';
@@ -130,7 +153,7 @@ $('forecast-step').addEventListener('input',()=>{
 });
 $('forecast-step').addEventListener('change',()=>void showFrame());
 
-async function loadDetail(kind:'aviation'|'sounding'|'radar') {
+async function loadDetail(kind:'aviation'|'radar') {
   if(!$<HTMLDetailsElement>(`${kind}-detail`).open)return;
   const target=$(kind==='aviation'?'aviation-text':`${kind}-image`);
   try {
@@ -139,17 +162,17 @@ async function loadDetail(kind:'aviation'|'sounding'|'radar') {
       target.textContent=(result.error?'Napaka vira · shranjena napoved\n\n':'')+(result.data||'Ni podatkov.');
     } else {
       const result=await imageSource(kind);
-      const image=new Image();image.src=result.url;image.alt=kind==='radar'?'Radar padavin':'Sondaža Ljubljana';
+      const image=new Image();image.src=result.url;image.alt='Radar padavin';
       image.className='h-auto w-full max-w-[740px]';
       target.replaceChildren(image);
       if(result.stale){const warning=document.createElement('p');warning.textContent='Shranjena slika · napaka vira';target.appendChild(warning);}
     }
   } catch {target.textContent='Vir ni dosegljiv.';}
 }
-for(const kind of ['aviation','sounding','radar'] as const) {
+for(const kind of ['aviation','radar'] as const) {
   $(`${kind}-detail`).addEventListener('toggle',()=>void loadDetail(kind));
 }
 startPolling(()=>Promise.allSettled([
-  loadRegionalCharts(),loadThermals(),loadFrames(),
-  ...(['aviation','sounding','radar'] as const).map(kind=>loadDetail(kind)),
+  loadRegionalCharts(),loadSounding(),loadThermals(),loadFrames(),
+  ...(['aviation','radar'] as const).map(kind=>loadDetail(kind)),
 ]));

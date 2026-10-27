@@ -10,8 +10,11 @@ export function sampleLabel(sample:WindSample):string {
   return `${clock(sample.timestamp)} · veter ${speed(sample.avg)} m/s · sunki ${speed(sample.gust)} m/s · ${directionName(sample)}`;
 }
 // Same text as sampleLabel, with the values emphasized. Only numbers and fixed words, so safe as HTML.
+// Always two lines (speeds, then direction), so moving the slider never changes its height: direction
+// names range from "Jug" to "Severozahod", and on narrow screens the long ones used to wrap.
 export function sampleReading(sample:WindSample):string {
-  return `<span class="font-semibold">${clock(sample.timestamp)}</span> · veter <span class="font-semibold">${speed(sample.avg)}</span> m/s · sunki <span class="font-semibold">${speed(sample.gust)}</span> m/s · <span class="font-semibold">${directionName(sample)}</span>`;
+  return `<span class="block whitespace-nowrap"><span class="font-semibold">${clock(sample.timestamp)}</span> · veter <span class="font-semibold">${speed(sample.avg)}</span> m/s · sunki <span class="font-semibold">${speed(sample.gust)}</span> m/s</span>
+    <span class="block">Smer: <span class="font-semibold">${directionName(sample)}</span></span>`;
 }
 export function windPath(samples:WindSample[],field:'avg'|'gust',x:(time:number)=>number,y:(value:number)=>number,maxGap:number):string {
   let path='',previous:WindSample|null=null;

@@ -1,11 +1,10 @@
 import { XMLParser } from 'fast-xml-parser';
-import { discoverJadralci, regionalImage, chartRegions, nearestRegion } from './jadralci.ts';
+import { discoverJadralci, regionalImage, chartRegions, nearestRegion, thermalRegions } from './jadralci.ts';
 import { parseVetrHistory, chronological, speed, type WindSample } from './history.ts';
 import { locations } from './sites.ts';
 import { inGorenjska } from './gorenjska.ts';
 
 export const ARSO = 'https://meteo.arso.gov.si';
-export const regions = { LES: 'Gorenjska', NGO: 'Primorska', LJU: 'Osrednja', NMO: 'Dolenjska', CEL: 'Štajerska', MSO: 'Pomurska' } as const;
 export const layers = { '1': 'Padavine', '2': 'Veter · 1500 m', '3': 'Veter · 750 m', '4': 'Temperatura', '5': 'Veter · 10 m', '6': 'Veter · Osrednja', '7': 'Veter · JZ', '8': 'Veter · JV', '9': 'Veter · SZ', '10': 'Veter · SV' } as const;
 export interface Station {
   id: string; name: string; region: string; source: 'vetr' | 'skytech' | 'arso' | 'luftar'; url: string;
@@ -243,7 +242,7 @@ export function sourceFor(key: string, anchor?: string): Source | null {
   if (key === 'sounding') return { url:`${ARSO}/uploads/probase/www/aviation/observ/upper/graphic/sigps_ljubljana-bezigrad.png`, interval:1800, image:true };
   if (key === 'radar') return { url:`${ARSO}/uploads/probase/www/observ/radar/si0_zm_si_latest.jpg`, interval:300, image:true };
   const [type,id] = key.split(':');
-  if (type==='thermal' && key===`thermal:${id}` && Object.hasOwn(regions,id)) return { url:`${ARSO}/uploads/probase/www/aviation/RSS/termika${id}.xml`, interval:600, parse:parseThermals };
+  if (type==='thermal' && key===`thermal:${id}` && Object.hasOwn(thermalRegions,id)) return { url:`${ARSO}/uploads/probase/www/aviation/RSS/termika${id}.xml`, interval:600, parse:parseThermals };
   if (type==='zaladin' && key===`zaladin:${id}` && Object.hasOwn(layers,id)) return { url:`https://zaladin.razor.si/zaladin.php?slika=${id}`, interval:1800, parse:parseFrames };
   // Only allow exact model image paths; never accept an arbitrary upstream URL.
   if (key.startsWith('frame:')) {

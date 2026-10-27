@@ -71,7 +71,7 @@ All upstream URLs are allowlisted, with canonical cache keys. Model images must 
 - Combined vetr/Skytech/ARSO/Luftar station list, source/region/search filters, freshness and exact observation times.
 - Wind and gusts in m/s only; saved stations use local storage.
 - Sv. Peter expands inline into a wind-strength SVG graph (average/gust) and a scrollable row of timestamped wind-direction arrows, with a shared time slider. Arrows point where the wind blows; compass labels show where it comes from. Tap an arrow to inspect that reading. History is normalized from vetr.si's embedded weather data and fetched only when expanded. Missing speed readings and large time gaps are not connected.
-- Six ARSO thermal regions and forecast validity dates.
+- One region picker on Napoved drives both the Jadralci charts (12 regions) and the ARSO thermal forecast (6 regions; each Jadralci region uses the one it belongs to by name), with forecast validity dates.
 - Ten Zaladin layers, newest model run, manual time slider, single-frame downloads.
 - All five Jadralci regional images for all 12 regions: temperature gradient, relative humidity/clouds, wind, and two forecast soundings.
 - Model-run discovery follows ARSO's 04/16 UTC switch, with bounded fallback checks for missing runs; dates are never hardcoded. Only selected-region images are fetched, starting when the section becomes visible.

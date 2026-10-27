@@ -4,6 +4,13 @@ export const chartRegions = {
   NMO:'Dolenjska', NGO:'Zahodna Primorska', BOV:'Posočje', POS:'Vzhodna Primorska',
   POR:'Obala', KOC:'Notranjska', PTU:'Vzhodna Štajerska', SGR:'Koroška',
 } as const;
+// ARSO thermal forecasts (RSS) exist for 6 regions. Each Jadralci region uses the one it belongs to by
+// name, so Napoved needs a single region picker.
+export const thermalRegions = { LES:'Gorenjska', NGO:'Primorska', LJU:'Osrednja', NMO:'Dolenjska', CEL:'Štajerska', MSO:'Pomurska' } as const;
+export const thermalRegionFor:Record<keyof typeof chartRegions,keyof typeof thermalRegions> = {
+  LES:'LES', LJU:'LJU', CEL:'CEL', MSO:'MSO', NMO:'NMO', NGO:'NGO',
+  BOV:'NGO', POS:'NGO', POR:'NGO', KOC:'LJU', PTU:'CEL', SGR:'CEL',
+};
 // ARSO forecast point behind each region code (Lesce, Ljubljana, Celje, …).
 const chartPoints:Record<keyof typeof chartRegions,[number,number]> = {
   LES:[46.36,14.17], LJU:[46.06,14.51], CEL:[46.24,15.27], MSO:[46.66,16.17],
