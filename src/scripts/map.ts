@@ -39,19 +39,23 @@ let selected:Station|null=null;
 // separate so every arrow can draw above every label, including neighbouring stations' labels.
 const markers=new Map<string,Marker>(),labels=new Map<string,Marker>();
 
-// A slim navigation-style arrow pointing where the wind blows (compass direction + 180°): black, or red
-// when the average or gusts are over 10 m/s. Its label is a white pill just below: average bold, gusts
+// A slim navigation-style arrow pointing where the wind blows (compass direction + 180°), coloured by the
+// stronger of average and gusts in flying bands: green up to 4 m/s, yellow to 7, orange to 10, red above.
+// A white outline with a thin dark edge keeps every colour visible on light and green map areas. Its label is a white pill just below: average bold, gusts
 // lighter. Zoomed out, a smaller arrow with the rounded average only, so dense areas stay readable.
 // Stale stations are half transparent (solid on hover); the selected one gets a blue ring. Without a
 // direction, a dot replaces the arrow.
 function icon(station:Station) {
   const {stale}=freshness(station);
   const isSelected=selected?.id===station.id;
-  const color=Math.max(station.avg??0,station.gust??0)>10?'#dc2626':'#18181b';
+  const wind=station.avg===null&&station.gust===null?null:Math.max(station.avg??0,station.gust??0);
+  const color=wind===null?'#a1a1aa':wind<=4?'#16a34a':wind<=7?'#eab308':wind<=10?'#f97316':'#dc2626';
   const deg=degrees[station.direction];
-  const small=map.getZoom()<7&&!isSelected,size=small?24:36;
-  const shape=deg===undefined?`<circle r="6" fill="${color}" stroke="white" stroke-width="2"/>`
-    :`<path transform="rotate(${deg+180})" d="M0 -14 L10 12 L0 6 L-10 12 Z" fill="${color}" stroke="white" stroke-width="2" stroke-linejoin="round"/>`;
+  const small=map.getZoom()<7&&!isSelected,size=small?30:46;
+  // Drawn twice: a dark wide stroke underneath, then the coloured shape with a white stroke on top.
+  const outline=(paint:string)=>deg===undefined?`<circle r="6" ${paint}/>`
+    :`<path transform="rotate(${deg+180})" d="M0 -14 L10 12 L0 6 L-10 12 Z" stroke-linejoin="round" ${paint}/>`;
+  const shape=outline('fill="none" stroke="rgb(0 0 0 / 0.55)" stroke-width="5"')+outline(`fill="${color}" stroke="white" stroke-width="2.5"`);
   const fade=stale&&!isSelected?'opacity-50 hover:opacity-100':'';
   const arrow=`<svg viewBox="-18 -18 36 36" width="${size}" height="${size}" class="block overflow-visible drop-shadow-[0_1px_2px_rgb(0_0_0/0.35)] transition hover:scale-110 ${fade}">${shape}</svg>`;
   const text=small?(station.avg===null?'—':String(Math.round(station.avg)))
@@ -80,7 +84,7 @@ function renderMarkers() {
     }
     // Stations at the same spot sit side by side.
     const spot=station.location.map(n=>n.toFixed(2)).join();
-    const offset=(seen.get(spot)??0)*30;seen.set(spot,offset/30+1);
+    const offset=(seen.get(spot)??0)*40;seen.set(spot,offset/40+1);
     const at:[number,number]=[station.location[1],station.location[0]];
     let marker=markers.get(station.id),labelMarker=labels.get(station.id);
     if(!marker||!labelMarker) {
