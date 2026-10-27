@@ -127,7 +127,9 @@ test('Zemljevid: live markers, site panel with wind graph only',async({page})=>{
   await expect(page.locator('#site-charts [data-chart]')).toHaveCount(1,{timeout:30000});
   await expect(page.locator('#site-forecast')).toHaveCount(0);
   const latest=await page.locator('#site-reading').textContent();
-  await page.locator('#site-time').focus();await page.locator('#site-time').press('Home');
+  // No slider: tapping the start of the graph (or Home on the focused graph) shows the oldest reading.
+  await expect(page.locator('#site-time')).toHaveCount(0);
+  await page.locator('#site-charts').focus();await page.locator('#site-charts').press('Home');
   await expect(page.locator('#site-reading')).not.toHaveText(latest!);
   await page.locator('#site-close').click();await expect(page.locator('#site')).toBeHidden();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

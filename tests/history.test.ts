@@ -47,10 +47,14 @@ test('direction arrows sit in the same chart as speed',()=>{
   assert.ok(html.includes('rotate(180)'));
   assert.ok(html.includes('veter iz SZ'));assert.ok(html.includes('veter iz S'));
 });
-test('chart widens so every direction arrow is shown',()=>{
+test('chart fits the width and still shows every direction arrow in one row (shrunk when tight)',()=>{
   const dense=Array.from({length:60},(_,i)=>({timestamp:new Date(Date.parse('2026-10-26T00:00:00Z')+i*600000).toISOString(),avg:1,gust:2,direction:90}));
-  const indexes=[...windCharts(dense,3).matchAll(/data-history-index="(\d+)"/g)].map(m=>Number(m[1]));
+  const html=windCharts(dense,3,400);
+  assert.equal(Number(html.match(/data-chart="wind"[^>]*width="(\d+)"/)![1]),400-54+16); // never wider than the panel
+  const indexes=[...html.matchAll(/data-history-index="(\d+)"/g)].map(m=>Number(m[1]));
   assert.equal(indexes.length,60);
+  assert.ok(!html.includes(' 166) rotate(')&&/ 175\) rotate\(270\) scale\(0\.\d+\)/.test(html)); // one row, shrunk
+  assert.equal(html.match(/data-xs="([^"]*)"/)![1].split(',').length,60); // every reading can still be picked
 });
 test('reading spells out direction on its own line, with the same values as the plain label',()=>{
   assert.ok(sampleLabel(samples[1]).endsWith('· Sever'));assert.ok(sampleLabel(samples[0]).endsWith('· Severozahod'));

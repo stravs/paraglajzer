@@ -197,28 +197,24 @@ function renderHeader() {
   $('site-name').textContent=selected.name;
   $('site-meta').innerHTML=`<a href="${escape(selected.url)}" target="_blank" rel="noopener noreferrer" class="underline">${sourceLabel[selected.source]}</a> · ${escape(selected.region)} · ${selected.observedAt?escape(date(selected.observedAt)):''} · <span class="${stale?'text-amber-700':''}">${escape(label)}</span>`;
 }
-function centerSelected() {
-  const scroller=document.querySelector<HTMLElement>('#site [data-wind-scroll]');
-  if(scroller)scroller.scrollLeft=Number(scroller.dataset.selectedX)-scroller.clientWidth/2;
+// The panel shows the last 4 hours of readings (before the newest one).
+function recent():WindSample[] {
+  const all=history?.data||[],newest=Date.parse(all.at(-1)?.timestamp??'');
+  return all.filter(sample=>Date.parse(sample.timestamp)>=newest-4*3600000);
 }
 function renderHistory() {
-  const samples=history?.data||[];
+  const samples=recent();
   const latest=samples.at(-1);
   const stale=latest&&Date.now()-Date.parse(latest.timestamp)>25*60000;
   const status=$('site-history-status');
   status.textContent=historyError||(historyLoading?'Nalaganje…':stale?'Zastarele meritve':!samples.length?'Ni meritev.':'');
   status.className=`mb-2 text-xs empty:hidden ${historyError||stale?'text-amber-700':'text-zinc-500'}`;
-  const slider=$<HTMLInputElement>('site-time');
-  slider.hidden=!samples.length;
   if(!samples.length){$('site-reading').innerHTML='';$('site-charts').innerHTML='';$('site-range').textContent='';return;}
   const found=selectedTime?samples.findIndex(sample=>sample.timestamp===selectedTime):-1;
   const index=found<0?samples.length-1:found;
-  slider.max=String(samples.length-1);slider.value=String(index);
-  slider.setAttribute('aria-valuetext',sampleLabel(samples[index]));
   $('site-reading').innerHTML=sampleReading(samples[index]);
   $('site-charts').innerHTML=windCharts(samples,index,$('site-charts').clientWidth||400);
   $('site-range').textContent=`${date(samples[0].timestamp)}–${date(latest!.timestamp)} · Europe/Ljubljana`;
-  centerSelected();
 }
 async function loadHistory() {
   if(!selected)return;
@@ -261,16 +257,32 @@ function closeSite() {
 }
 $('site-close').addEventListener('click',closeSite);
 addEventListener('keydown',event=>{if(event.key==='Escape'&&selected)closeSite();});
-$('site-time').addEventListener('input',()=>{
-  const sample=history?.data?.[Number($<HTMLInputElement>('site-time').value)];
-  if(!sample)return;
+// Reading under the pointer: the sample whose x position on the graph is nearest.
+function sampleAt(clientX:number):number {
+  const chart=document.querySelector<SVGSVGElement>('#site-charts svg[data-chart]');
+  if(!chart?.dataset.xs)return -1;
+  const box=chart.getBoundingClientRect(),scale=chart.viewBox.baseVal.width/box.width;
+  const x=(clientX-box.left)*scale,xs=chart.dataset.xs.split(',').map(Number);
+  return xs.reduce((best,value,i)=>Math.abs(value-x)<Math.abs(xs[best]-x)?i:best,0);
+}
+function showSample(index:number) {
+  const sample=recent()[index];
+  if(!sample||sample.timestamp===selectedTime)return;
   selectedTime=sample.timestamp;renderHistory();
-});
-$('site-charts').addEventListener('click',event=>{
-  const arrow=(event.target as Element).closest<SVGElement>('[data-history-index]');
-  if(!arrow)return;
-  const slider=$<HTMLInputElement>('site-time');
-  slider.value=arrow.dataset.historyIndex!;slider.dispatchEvent(new Event('input'));
+}
+// Mouse: hovering shows the reading there; leaving goes back to the latest. Touch: a tap shows it.
+// The graph always fits the panel width, so it never scrolls.
+$('site-charts').addEventListener('pointermove',event=>{if(event.pointerType==='mouse')showSample(sampleAt(event.clientX));});
+$('site-charts').addEventListener('pointerleave',event=>{if(event.pointerType==='mouse'&&selectedTime!==null){selectedTime=null;renderHistory();}});
+$('site-charts').addEventListener('click',event=>showSample(sampleAt(event.clientX)));
+$('site-charts').addEventListener('keydown',event=>{
+  const samples=recent();
+  if(!samples.length)return;
+  const current=selectedTime?samples.findIndex(sample=>sample.timestamp===selectedTime):samples.length-1;
+  const next={ArrowLeft:current-1,ArrowRight:current+1,Home:0,End:samples.length-1}[event.key];
+  if(next===undefined)return;
+  event.preventDefault();
+  if(samples[next]){selectedTime=samples[next].timestamp;renderHistory();}
 });
 addEventListener('resize',()=>{if(selected)renderHistory();});
 

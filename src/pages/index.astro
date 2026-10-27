@@ -31,10 +31,9 @@ import Layout from '../layouts/Layout.astro';
     </div>
     <section aria-label="Veter" class="pt-3">
       <p id="site-history-status" role="status" class="mb-2 text-xs text-zinc-500 empty:hidden"></p>
-      <output id="site-reading" for="site-time" class="mb-3 block text-base tabular-nums"></output>
-      <div id="site-charts"></div>
-      <label for="site-time" class="sr-only">Čas meritve</label>
-      <input id="site-time" type="range" min="0" max="0" value="0" hidden class="min-h-10 w-full accent-zinc-700" />
+      <output id="site-reading" for="site-charts" class="mb-3 block text-base tabular-nums"></output>
+      <!-- Hover (or tap) the graph to read a moment; ← → Home End when focused. -->
+      <div id="site-charts" tabindex="0" aria-label="Zgodovina vetra; s puščicama izberete meritev" class="rounded outline-none focus-visible:ring-2 focus-visible:ring-blue-600"></div>
       <p id="site-range" class="mt-1 text-[10px] text-zinc-500"></p>
     </section>
   </aside>
