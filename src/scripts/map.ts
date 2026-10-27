@@ -35,13 +35,16 @@ const speed=(n:number|null)=>n===null?'—':n.toFixed(1);
 const layers=read('layers',{wind:true,cameras:false});
 let stations:Station[]=[];
 let selected:Station|null=null;
-const markers=new Map<string,Marker>();
+// Each station has two markers: the arrow (focusable, carries the title) and its number label. They are
+// separate so every arrow can draw above every label, including neighbouring stations' labels.
+const markers=new Map<string,Marker>(),labels=new Map<string,Marker>();
 
 // A slim navigation-style arrow pointing where the wind blows (compass direction + 180°): black, or red
-// when the average or gusts are over 10 m/s. A white pill underneath: average bold, gusts lighter.
-// Zoomed out, a smaller arrow with the rounded average only, so dense areas stay readable. Stale stations are almost transparent
-// (solid on hover); the selected one gets a blue ring. Without a direction, a dot replaces the arrow.
-function icon(station:Station,offset:number):{html:string;offset:[number,number]} {
+// when the average or gusts are over 10 m/s. Its label is a white pill just below: average bold, gusts
+// lighter. Zoomed out, a smaller arrow with the rounded average only, so dense areas stay readable.
+// Stale stations are half transparent (solid on hover); the selected one gets a blue ring. Without a
+// direction, a dot replaces the arrow.
+function icon(station:Station) {
   const {stale}=freshness(station);
   const isSelected=selected?.id===station.id;
   const color=Math.max(station.avg??0,station.gust??0)>10?'#dc2626':'#18181b';
@@ -49,15 +52,13 @@ function icon(station:Station,offset:number):{html:string;offset:[number,number]
   const small=map.getZoom()<7&&!isSelected,size=small?24:36;
   const shape=deg===undefined?`<circle r="6" fill="${color}" stroke="white" stroke-width="2"/>`
     :`<path transform="rotate(${deg+180})" d="M0 -14 L10 12 L0 6 L-10 12 Z" fill="${color}" stroke="white" stroke-width="2" stroke-linejoin="round"/>`;
-  const arrow=`<svg viewBox="-18 -18 36 36" width="${size}" height="${size}" class="overflow-visible drop-shadow-[0_1px_2px_rgb(0_0_0/0.35)]">${shape}</svg>`;
-  const pill=`rounded-full bg-white/95 font-semibold leading-4 tabular-nums text-zinc-900 shadow-sm ${isSelected?'ring-2 ring-blue-600':'ring-1 ring-black/10'}`;
+  const fade=stale&&!isSelected?'opacity-50 hover:opacity-100':'';
+  const arrow=`<svg viewBox="-18 -18 36 36" width="${size}" height="${size}" class="block overflow-visible drop-shadow-[0_1px_2px_rgb(0_0_0/0.35)] transition hover:scale-110 ${fade}">${shape}</svg>`;
   const text=small?(station.avg===null?'—':String(Math.round(station.avg)))
     :`${speed(station.avg)}${station.gust===null?'':`<span class="font-normal text-zinc-500"> / ${speed(station.gust)}</span>`}`;
-  // The element is centred on the station; move it so the arrow's centre (not the whole stack) sits there.
-  // Pill: 16 px high (12 px small), 2 px gap.
-  const shift=small?(2+12)/2:(2+16)/2;
-  const fade=stale&&!isSelected?'opacity-50 hover:opacity-100':'';
-  return {offset:[small?offset*0.6:offset,shift],html:`<div class="flex flex-col items-center gap-0.5 transition hover:scale-110 ${fade}">${arrow}<span class="${pill} ${small?'px-1 text-[9px] leading-3':'px-1.5 text-[11px]'}">${text}</span></div>`};
+  const label=`<span class="block rounded-full bg-white/95 font-semibold tabular-nums text-zinc-900 shadow-sm transition ${fade} ${isSelected?'ring-2 ring-blue-600':'ring-1 ring-black/10'} ${small?'px-1 text-[9px] leading-3':'px-1.5 text-[11px] leading-4'}">${text}</span>`;
+  // The label hangs from the station point, 2 px below the arrow.
+  return {arrow,label,small,labelTop:size/2+2};
 }
 function label(station:Station) {
   return `${station.name} · veter ${speed(station.avg)} m/s · sunki ${speed(station.gust)} m/s · ${station.direction} · ${freshness(station).label}`;
@@ -74,26 +75,35 @@ function hasVetrTwin(station:Station) {
 function renderMarkers() {
   const seen=new Map<string,number>();
   for(const station of stations) {
-    if(!station.location||hasVetrTwin(station)){markers.get(station.id)?.remove();markers.delete(station.id);continue;}
+    if(!station.location||hasVetrTwin(station)){
+      markers.get(station.id)?.remove();markers.delete(station.id);labels.get(station.id)?.remove();labels.delete(station.id);continue;
+    }
     // Stations at the same spot sit side by side.
     const spot=station.location.map(n=>n.toFixed(2)).join();
     const offset=(seen.get(spot)??0)*30;seen.set(spot,offset/30+1);
-    let marker=markers.get(station.id);
-    if(!marker) {
-      const element=document.createElement('div');
+    const at:[number,number]=[station.location[1],station.location[0]];
+    let marker=markers.get(station.id),labelMarker=labels.get(station.id);
+    if(!marker||!labelMarker) {
+      const element=document.createElement('div'),labelElement=document.createElement('div');
       element.tabIndex=0;element.setAttribute('role','button');element.className='cursor-pointer';
-      element.addEventListener('click',event=>{event.stopPropagation();openSite(station.id);});
+      labelElement.className='cursor-pointer';labelElement.setAttribute('aria-hidden','true');
+      for(const target of [element,labelElement])target.addEventListener('click',event=>{event.stopPropagation();openSite(station.id);});
       element.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openSite(station.id);}});
-      marker=new Marker({element}).setLngLat([station.location[1],station.location[0]]).addTo(map);
-      markers.set(station.id,marker);
+      marker=new Marker({element}).setLngLat(at).addTo(map);
+      labelMarker=new Marker({element:labelElement,anchor:'top'}).setLngLat(at).addTo(map);
+      markers.set(station.id,marker);labels.set(station.id,labelMarker);
     }
-    const {html,offset:shift}=icon(station,offset);
-    const element=marker.setLngLat([station.location[1],station.location[0]]).setOffset(shift).getElement();
-    element.innerHTML=html;
-    // Selected above fresh, fresh above stale, so live readings are not hidden by dead stations.
-    element.style.zIndex=selected?.id===station.id?'2':freshness(station).stale?'':'1';
+    const {arrow,label:text,small,labelTop}=icon(station);
+    const x=small?offset*0.6:offset;
+    const element=marker.setLngLat(at).setOffset([x,0]).getElement();
+    const labelElement=labelMarker.setLngLat(at).setOffset([x,labelTop]).getElement();
+    element.innerHTML=arrow;labelElement.innerHTML=text;
+    // All arrows above all labels; within each, selected above fresh above stale, so live readings are
+    // not hidden by dead stations.
+    const rank=selected?.id===station.id?2:freshness(station).stale?0:1;
+    element.style.zIndex=String(4+rank);labelElement.style.zIndex=String(1+rank);
     element.setAttribute('title',label(station));element.setAttribute('aria-label',label(station));
-    element.hidden=!layers.wind;
+    element.hidden=labelElement.hidden=!layers.wind;
   }
 }
 
