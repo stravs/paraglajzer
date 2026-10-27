@@ -7,13 +7,18 @@ import type { Station } from '../lib/sources';
 import type { WindSample } from '../lib/history';
 import { webcams,type Webcam } from '../lib/webcams';
 import { $,escape,date,freshness,read,save,source,sourceLabel,startPolling,type Snapshot } from './weather';
-import { windCharts,sampleLabel,sampleReading } from './wind-charts';
+import { windCharts,sampleLabel,sampleReading,windColor } from './wind-charts';
 
 // Flat, north-up OpenTopoMap (hillshaded, with contours): no tilt or rotation, so arrows keep true
 // compass angles. Zoomed out, OpenTopoMap tints mountains orange by height, so its colour is washed
 // out there and comes back gradually by zoom 10.
 setWorkerUrl(workerUrl);
-const hiddenMapLayers=new Set(['road_hiking','road_hiking_label','road_hiking_shield','road_hiking_node_shield']);
+// Maptoolkit layers left out for a cleaner flying map, by layer-id prefix: hiking routes, points of interest
+// (generic, drinking water, climbing, huts), buildings, paths, minor roads, railways, ferries, road
+// restrictions and walls, protected areas, province borders, rocks, land use and sea depth. Kept: terrain,
+// contours, peaks, places, water, major roads, cable cars and country borders.
+const hiddenMapLayers=['road_hiking','poi_generic','poi_drinking','poi_climbing','poi_hut','building_','road_path','road_minor',
+  'road_rail','road_ferry','road_restriction','road_walls','border_protected','border_admin_province','nature_rocks','nature_landuse','water_bathymetry'];
 // The browser remembers the last map position and reopens there. Without one (first visit, storage
 // blocked), desktop starts on all of Slovenia (all stations) and phones on the home sites
 // Sv. Peter, Stol (Karavanke) and Gozd, with the search bar at the bottom.
@@ -25,10 +30,9 @@ const map=new MapLibre({
     :matchMedia('(min-width: 768px)').matches
     ?{bounds:[[13.38,45.42],[16.6,46.88]],fitBoundsOptions:{padding:{top:70,bottom:40,left:40,right:60}}}
     :{bounds:[[14.17,46.34],[14.34,46.44]],fitBoundsOptions:{padding:{top:60,bottom:110,left:60,right:60}}}),maxPitch:0,dragRotate:false,touchPitch:false,attributionControl:{compact:false},
-  // Maptoolkit "Hiking" (vector, hillshading, contours; free, no key) without its red hiking-route lines,
-  // route names and route-number badges.
+  // Maptoolkit "Hiking" (vector, hillshading, contours; free, no key), with the layers above left out.
   style:'https://styles.maptoolkit.org/hiking.json',
-  transformStyle:(_previous,next)=>({...next,layers:next.layers.filter(layer=>!hiddenMapLayers.has(layer.id))}),
+  transformStyle:(_previous,next)=>({...next,layers:next.layers.filter(layer=>!hiddenMapLayers.some(prefix=>layer.id.startsWith(prefix)))}),
 });
 map.touchZoomRotate.disableRotation();map.keyboard.disableRotation();
 map.on('moveend',()=>{
@@ -58,8 +62,7 @@ const markers=new Map<string,Marker>(),labels=new Map<string,Marker>();
 function icon(station:Station) {
   const {stale}=freshness(station);
   const isSelected=selected?.id===station.id;
-  const wind=station.avg===null&&station.gust===null?null:Math.max(station.avg??0,station.gust??0);
-  const color=wind===null?'#a1a1aa':wind<=4?'#16a34a':wind<=7?'#eab308':wind<=10?'#f97316':'#dc2626';
+  const color=windColor(station.avg===null&&station.gust===null?null:Math.max(station.avg??0,station.gust??0));
   const deg=degrees[station.direction];
   const small=map.getZoom()<7&&!isSelected,size=small?30:46;
   // Drawn twice: a dark wide stroke underneath, then the coloured shape with a white stroke on top.

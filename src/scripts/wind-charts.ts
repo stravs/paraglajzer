@@ -2,6 +2,9 @@ import type { WindSample } from '../lib/history';
 const clock=(timestamp:string)=>new Intl.DateTimeFormat('sl-SI',{timeZone:'Europe/Ljubljana',hour:'2-digit',minute:'2-digit'}).format(new Date(timestamp));
 const compass=['S','SV','V','JV','J','JZ','Z','SZ','S'];
 const directions=['Sever','Severovzhod','Vzhod','Jugovzhod','Jug','Jugozahod','Zahod','Severozahod'];
+// Flying bands, shared by the map arrows and the graph: green up to 4 m/s, yellow to 7, orange to 10, red above.
+export const bands:[number,string][]=[[4,'#16a34a'],[7,'#eab308'],[10,'#f97316'],[Infinity,'#dc2626']];
+export const windColor=(value:number|null)=>value===null?'#a1a1aa':bands.find(([limit])=>value<=limit)![1];
 const speed=(value:number|null)=>value===null?'—':value.toFixed(1);
 // ARSO gives exact degrees; vetr and Skytech give multiples of 45. Names use the nearest of 8 points.
 const point=(degrees:number)=>Math.round(degrees/45)%8;
@@ -52,6 +55,12 @@ export function windCharts(samples:WindSample[],selected:number,available=400):s
     const time=start+span*i/(count-1);
     return `<text x="${x(time)}" y="192" text-anchor="${i===0?'start':i===count-1?'end':'middle'}" fill="#71717a" font-size="10">${clock(new Date(time).toISOString())}</text>`;
   }).join('');
+  // Background: the flying bands as horizontal stripes at 35% opacity (green up to 4 m/s, yellow to 7, orange to
+  // 10, red above), so each line sits on the colour of its speed. The lines stay black (average) and grey (gusts).
+  const background=bands.map(([limit,color],i)=>{
+    const from=i?bands[i-1][0]:0,to=Math.min(limit,top);
+    return from<top?`<rect x="8" width="${plot}" y="${y(to).toFixed(1)}" height="${(y(from)-y(to)).toFixed(1)}" fill="${color}" fill-opacity="0.35"/>`:'';
+  }).join('');
   const series=(['gust','avg'] as const).map(key=>{
     const color=key==='gust'?'#a1a1aa':'#27272a';
     const path=windPath(samples,key,x,y,maxGap);
@@ -71,7 +80,7 @@ export function windCharts(samples:WindSample[],selected:number,available=400):s
     return `<g data-history-index="${index}" class="cursor-pointer"><title>${clock(sample.timestamp)} · veter iz ${compass[point(sample.direction)]}</title><rect x="${(px-9).toFixed(1)}" y="${rowY()-11}" width="18" height="22" fill="transparent"/><g transform="translate(${px.toFixed(1)} ${rowY()}) rotate(${sample.direction+180}) scale(${scale.toFixed(2)})" fill="none" stroke="${selected?'#2563eb':'#27272a'}" stroke-width="${selected?2.5:2}" stroke-linecap="round" stroke-linejoin="round"><path d="M0 8V-8M-5 -3L0 -8 5 -3"/></g></g>`;
   }).join('');
   const axis=`<svg aria-hidden="true" viewBox="0 0 38 200" width="38" height="200" class="shrink-0">${labels}<text x="31" y="19" text-anchor="end" fill="#71717a" font-size="10">smer</text></svg>`;
-  const chart=`<svg data-chart="wind" data-xs="${samples.map(sample=>x(Date.parse(sample.timestamp)).toFixed(1)).join(',')}" role="img" aria-label="Hitrost, sunki in smer vetra skozi čas; puščice kažejo, kam piha" viewBox="0 0 ${width.toFixed(0)} 200" width="${width.toFixed(0)}" height="200" class="max-w-none"><title>Hitrost, sunki (m/s) in smer vetra</title>${grid}<line x1="8" x2="${8+plot}" y1="15" y2="15" stroke="#f4f4f5"/>${times}<line x1="${activeX}" x2="${activeX}" y1="4" y2="174" stroke="#a1a1aa" stroke-dasharray="2 3"/>${series}${selectedDots}${arrows}</svg>`;
+  const chart=`<svg data-chart="wind" data-xs="${samples.map(sample=>x(Date.parse(sample.timestamp)).toFixed(1)).join(',')}" role="img" aria-label="Hitrost, sunki in smer vetra skozi čas; puščice kažejo, kam piha" viewBox="0 0 ${width.toFixed(0)} 200" width="${width.toFixed(0)}" height="200" class="max-w-none"><title>Hitrost, sunki (m/s) in smer vetra</title>${background}${grid}<line x1="8" x2="${8+plot}" y1="15" y2="15" stroke="#f4f4f5"/>${times}<line x1="${activeX}" x2="${activeX}" y1="4" y2="174" stroke="#a1a1aa" stroke-dasharray="2 3"/>${series}${selectedDots}${arrows}</svg>`;
   // No title; the line legend sits under the graph.
   return `<figure><div class="flex">${axis}<div data-wind-scroll data-selected-x="${activeX.toFixed(0)}" class="min-w-0">${chart}</div></div><figcaption class="mt-1 text-right text-xs text-zinc-500"><span class="text-zinc-900">━ povprečje</span> &nbsp;┄ sunki</figcaption></figure>`;
 }
