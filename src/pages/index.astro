@@ -4,17 +4,22 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import Layout from '../layouts/Layout.astro';
 ---
 <Layout page="Zemljevid" full>
-  <div class="absolute inset-0 z-0"><div id="map" class="h-full w-full" role="application" aria-label="Zemljevid postaj"></div></div>
-  <div class="absolute inset-x-2 top-2 z-[600] md:right-auto md:w-80">
-    <div class="flex items-center rounded-lg bg-white shadow-md">
-      <label for="site-search" class="sr-only">Išči vzletišče</label>
-      <input id="site-search" type="search" placeholder="Išči vzletišče…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list" class="min-h-11 min-w-0 flex-1 rounded-lg bg-transparent px-3 text-base outline-none md:text-sm" />
-      <nav aria-label="Strani" class="flex shrink-0 text-xs text-zinc-600">
-        <a href="/napoved/" class="flex min-h-11 items-center px-3 hover:text-black">Napoved</a>
+  <!-- On phones the search bar is at the bottom, so the map's bottom controls move up above it. -->
+  <div class="absolute inset-0 z-0"><div id="map" class="h-full w-full max-md:[&_.maplibregl-ctrl-bottom-right]:mb-14 max-md:[&_.maplibregl-ctrl-bottom-left]:mb-14" role="application" aria-label="Zemljevid postaj"></div></div>
+  <!-- Phones: at the bottom, results open upwards (column reversed). Desktop: top left, results below. -->
+  <div class="absolute inset-x-2 bottom-2 z-[600] flex flex-col-reverse gap-1 md:top-2 md:right-auto md:bottom-auto md:w-80 md:flex-col">
+    <!-- Search box and a separate Napoved button beside it. -->
+    <div class="flex items-center gap-2">
+      <div class="flex min-w-0 flex-1 rounded-lg bg-white shadow-md">
+        <label for="site-search" class="sr-only">Išči vzletišče</label>
+        <input id="site-search" type="search" placeholder="Išči vzletišče…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list" class="min-h-11 min-w-0 flex-1 rounded-lg bg-transparent px-3 text-base outline-none md:text-sm" />
+      </div>
+      <nav aria-label="Strani" class="shrink-0">
+        <a href="/napoved/" class="flex min-h-11 items-center rounded-lg bg-white px-3 text-sm font-medium text-zinc-700 shadow-md hover:text-black">Napoved</a>
       </nav>
     </div>
-    <ul id="search-results" role="listbox" aria-label="Zadetki" hidden class="mt-1 max-h-80 overflow-y-auto rounded-lg bg-white py-1 shadow-md"></ul>
-    <p id="map-status" role="status" class="mt-1 w-fit rounded bg-white/90 px-2 py-1 text-xs text-zinc-600 empty:hidden">Nalaganje…</p>
+    <ul id="search-results" role="listbox" aria-label="Zadetki" hidden class="max-h-[50dvh] overflow-y-auto rounded-lg bg-white py-1 shadow-md max-md:flex-col-reverse max-md:[&:not([hidden])]:flex md:max-h-80"></ul>
+    <p id="map-status" role="status" class="w-fit rounded bg-white/90 px-2 py-1 text-xs text-zinc-600 empty:hidden">Nalaganje…</p>
   </div>
   <aside id="site" hidden aria-labelledby="site-name" class="absolute inset-x-0 bottom-0 z-[1000] max-h-[70%] overflow-y-auto border-t border-zinc-300 bg-white px-3 pb-6 shadow-lg md:inset-y-0 md:right-0 md:left-auto md:max-h-none md:w-[440px] md:border-t-0 md:border-l">
     <div class="sticky top-0 z-10 -mx-3 flex items-start justify-between gap-2 border-b border-zinc-200 bg-white px-3 py-2">

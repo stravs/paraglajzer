@@ -10,8 +10,9 @@ test('Postaje: compact m/s table, search, saved stations, no forecast fetches',a
   expect(await page.locator('[data-save]').count()).toBeGreaterThan(0);
   await expect(page.locator('thead')).toContainText('m/s');
   await expect(page.locator('body')).not.toContainText('km/h');
-  await expect(page.locator('nav a')).toHaveCount(3);
-  await expect(page.getByRole('link',{name:'Postaje',exact:true})).toHaveAttribute('aria-current','page');
+  // Postaje is not in the navigation (reached by URL); the nav has Zemljevid and Napoved.
+  await expect(page.locator('nav a')).toHaveCount(2);
+  await expect(page.getByRole('link',{name:'Postaje',exact:true})).toHaveCount(0);
   await page.locator('[data-save]').first().click();
   await page.selectOption('#source-filter','favorites');
   await expect(page.locator('[data-save]')).toHaveCount(1);
@@ -38,7 +39,14 @@ test('Napoved: five regional charts plus the Ljubljana sounding, region switch, 
   page.on('request',request=>{const url=new URL(request.url());if(url.pathname==='/api/source')keys.push(url.searchParams.get('key')||'');});
   await page.goto(`${base}/napoved/`);
   await expect(page.locator('#regional-images img')).toHaveCount(6,{timeout:45000});
-  await expect(page.locator('#regional-meta')).toContainText('UTC');
+  await expect(page.locator('#regional-meta')).toContainText('Napoved od ');
+  // ALADIN viewer: big arrows and a slider step through frames.
+  await expect(page.locator('#forecast-image')).toBeVisible({timeout:45000});
+  const position=await page.locator('#map-position').textContent();
+  await page.locator('#frame-next').click();
+  await expect(page.locator('#map-position')).not.toHaveText(position!);
+  // The slider follows the arrows.
+  await expect(page.locator('#forecast-step')).toHaveValue(String(Number(position!.split('/')[0])));
   // One region picker on the page; it drives both the charts and the thermal forecast.
   await expect(page.locator('main select[aria-label="Regija"]')).toHaveCount(1);
   await expect(page.locator('#thermal-region-name')).toHaveText('Gorenjska');
@@ -50,7 +58,10 @@ test('Napoved: five regional charts plus the Ljubljana sounding, region switch, 
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(keys).not.toContain('vetr');expect(keys).not.toContain('skytech');expect(keys).not.toContain('arso');expect(keys).not.toContain('luftar');expect(keys).not.toContain('stations');
   expect(errors).toEqual([]);
-  await page.getByRole('link',{name:'Postaje',exact:true}).click();await expect(page).toHaveURL(/\/postaje\//);
+  // Text forecast and radar are shown without opening anything.
+  await expect(page.locator('#aviation-text')).not.toHaveText('Nalaganje…',{timeout:30000});
+  await expect(page.locator('#radar-image img')).toHaveCount(1,{timeout:30000});
+  await page.getByRole('link',{name:'Zemljevid',exact:true}).click();await expect(page).toHaveURL(/\/$/);
 });
 test('Sv. Peter expands inline, shows one combined wind chart, and reuses cached history',async({page})=>{
   await page.setViewportSize({width:390,height:844});
@@ -132,6 +143,8 @@ test('Zemljevid: search finds a site without diacritics and opens it',async({pag
   await page.locator('#site-search').press('Enter');
   await expect(page.locator('#site-name')).toContainText('Kriška gora');
   await expect(page.locator('#search-results')).toBeHidden();
+  // On phones the site panel covers the bottom search bar; close it to search again.
+  await page.locator('#site-close').click();
   await page.locator('#site-search').fill('xyz nonexistent');
   await expect(page.locator('#search-results')).toContainText('Ni zadetkov.');
   await page.getByRole('link',{name:'Napoved',exact:true}).click();await expect(page).toHaveURL(/\/napoved\//);

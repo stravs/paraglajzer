@@ -73,7 +73,7 @@ test('Gorenjska + Kamnik boundary keeps home sites and leaves out neighbours',()
 });
 test('station listings keep a missing station while its reading is under 2 h old',()=>{
   const now=Date.parse('2026-10-27T10:00:00Z');
-  const station=(id:string,observedAt:string|null)=>({id,name:id,region:'Gorenjska',source:'arso' as const,url:'',avg:1,gust:2,direction:'S',observedAt,interval:30,note:'',location:[46.36,14.17] as [number,number]});
+  const station=(id:string,observedAt:string|null)=>({id,name:id,region:'Gorenjska',source:'skytech' as const,url:'',avg:1,gust:2,direction:'S',observedAt,interval:30,note:'',location:[46.36,14.17] as [number,number]});
   const merged=keepMissing([station('a','2026-10-27T09:50:00Z')],[station('a','2026-10-27T09:20:00Z'),station('b','2026-10-27T09:30:00Z'),station('c','2026-10-27T07:00:00Z'),station('d',null)],now);
   assert.deepEqual(merged.map(s=>[s.id,s.observedAt]),[['a','2026-10-27T09:50:00Z'],['b','2026-10-27T09:30:00Z']]);
   assert.equal(keepMissing([station('a',null)],null,now).length,1);
@@ -83,4 +83,10 @@ test('ARSO stations come from per-station latest files, Lesce included',()=>{
   assert.ok(arsoStations.includes('LESCE_'));
   assert.ok(arsoStations.every(id=>/^[A-Z0-9_-]{1,40}$/.test(id)));
   assert.equal(typeof sourceFor('arso')?.load,'function');
+});
+test('ARSO Vogel is left out (Skytech Vogel is shown) and does not linger from an older listing',()=>{
+  assert.ok(!arsoStations.includes('VOGEL_'));
+  const now=Date.parse('2026-10-27T10:00:00Z');
+  const vogel={id:'arso-VOGEL_',name:'Vogel',region:'Gorenjska',source:'arso' as const,url:'',avg:1,gust:2,direction:'S',observedAt:'2026-10-27T09:50:00Z',interval:30,note:'',location:[46.2594,13.8396] as [number,number]};
+  assert.equal(keepMissing([],[vogel],now).length,0);
 });

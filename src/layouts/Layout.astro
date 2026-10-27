@@ -2,7 +2,8 @@
 import '../styles/global.css';
 interface Props { page:'Zemljevid' | 'Napoved' | 'Postaje'; full?:boolean; }
 const { page,full=false }=Astro.props;
-const pages={Zemljevid:'/',Napoved:'/napoved/',Postaje:'/postaje/'} as const;
+// Postaje is not linked from the navigation; it is still reachable at /postaje/.
+const pages={Zemljevid:'/',Napoved:'/napoved/'} as const;
 ---
 <!doctype html>
 <html lang="sl">

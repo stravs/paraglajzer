@@ -4,6 +4,7 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import type { Station } from '../lib/sources';
 import type { WindSample } from '../lib/history';
 import { webcams,type Webcam } from '../lib/webcams';
+import { coveredBounds } from '../lib/gorenjska';
 import { $,escape,date,freshness,read,save,source,sourceLabel,startPolling,type Snapshot } from './weather';
 import { windCharts,sampleLabel,sampleReading } from './wind-charts';
 
@@ -12,8 +13,11 @@ import { windCharts,sampleLabel,sampleReading } from './wind-charts';
 // out there and comes back gradually by zoom 10.
 setWorkerUrl(workerUrl);
 const map=new MapLibre({
-  // Start on the home sites: Sv. Peter, Stol (Karavanke) and Gozd. All stations stay on the map.
-  container:'map',bounds:[[14.17,46.34],[14.34,46.44]],fitBoundsOptions:{padding:{top:90,bottom:60,left:60,right:60}},maxPitch:0,dragRotate:false,touchPitch:false,
+  // Desktop starts on the whole covered area (all stations); phones start on the home sites Sv. Peter,
+  // Stol (Karavanke) and Gozd, with the search bar at the bottom.
+  container:'map',...(matchMedia('(min-width: 768px)').matches
+    ?{bounds:coveredBounds,fitBoundsOptions:{padding:{top:70,bottom:40,left:40,right:60}}}
+    :{bounds:[[14.17,46.34],[14.34,46.44]],fitBoundsOptions:{padding:{top:60,bottom:110,left:60,right:60}}}),maxPitch:0,dragRotate:false,touchPitch:false,attributionControl:{compact:true},
   style:{
     version:8,
     sources:{
@@ -27,6 +31,11 @@ const map=new MapLibre({
   },
 });
 map.touchZoomRotate.disableRotation();map.keyboard.disableRotation();
+// The attribution is a small (i) button that expands on tap; MapLibre opens it on load, so close it.
+map.once('load',()=>{
+  const attribution=map.getContainer().querySelector('.maplibregl-ctrl-attrib');
+  attribution?.removeAttribute('open');attribution?.classList.remove('maplibregl-compact-show');
+});
 map.addControl(new NavigationControl({showCompass:false}),'bottom-right');
 
 // Compass labels used by both vetr and Skytech tables; the wind comes from this direction.

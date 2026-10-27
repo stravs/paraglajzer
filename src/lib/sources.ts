@@ -5,7 +5,8 @@ import { locations } from './sites.ts';
 import { inGorenjska } from './gorenjska.ts';
 
 export const ARSO = 'https://meteo.arso.gov.si';
-export const layers = { '1': 'Padavine', '2': 'Veter · 1500 m', '3': 'Veter · 750 m', '4': 'Temperatura', '5': 'Veter · 10 m', '6': 'Veter · Osrednja', '7': 'Veter · JZ', '8': 'Veter · JV', '9': 'Veter · SZ', '10': 'Veter · SV' } as const;
+// Zaladin layers offered on Napoved (the regional wind layers 6–10 are left out).
+export const layers = { '1': 'Padavine', '2': 'Veter · 1500 m', '3': 'Veter · 750 m', '4': 'Temperatura', '5': 'Veter · 10 m' } as const;
 export interface Station {
   id: string; name: string; region: string; source: 'vetr' | 'skytech' | 'arso' | 'luftar'; url: string;
   avg: number | null; gust: number | null; direction: string; observedAt: string | null;
@@ -19,9 +20,10 @@ export interface Source { url: string; interval: number; load?: () => Promise<un
 export function keepMissing(stations: Station[], previous: unknown, now = Date.now()): Station[] {
   if (!Array.isArray(previous)) return stations;
   const ids = new Set(stations.map(s => s.id));
-  // Only stations inside the covered area: an older cached listing may still hold all of Slovenia.
+  // Only stations inside the covered area (an older cached listing may still hold all of Slovenia), and
+  // only ARSO stations still on the list (one removed on purpose should not linger).
   return [...stations, ...(previous as Station[]).filter(s => !ids.has(s.id) && now - Date.parse(s.observedAt ?? '') < 2 * 3600000
-    && s.location !== null && inGorenjska(s.location))];
+    && s.location !== null && inGorenjska(s.location) && (s.source !== 'arso' || arsoStations.includes(s.id.slice(5))))];
 }
 export function plain(s: string): string {
   return s.replace(/<[^>]*>/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&deg;/g, '°').replace(/\s+/g, ' ').trim();
@@ -137,8 +139,9 @@ export function parseArso(xml: string): Station[] {
 // ARSO's national "latest" file only lists stations with data for the current 10-minute slot, so a
 // station whose reading arrives late (Lesce, every 30 min) can be missing for hours. Each station also has
 // its own small latest file (~10 KB) that always holds its newest reading, so those are used instead.
-// These are the ARSO stations in Gorenjska and Kamnik that report wind (checked 2026-10-27).
-export const arsoStations = ['BORST_GOREN-VAS_','KREDA-ICA_','KRVAVEC_','LESCE_','LJUBL-ANA_BRNIK_','PASJA-RAV_','RATECE_','RATIT-VEC_','RUDNO-POL_','VOGEL_'];
+// These are the ARSO stations in Gorenjska and Kamnik that report wind (checked 2026-10-27). Vogel is
+// left out: the Skytech Vogel station is shown there instead.
+export const arsoStations = ['BORST_GOREN-VAS_','KREDA-ICA_','KRVAVEC_','LESCE_','LJUBL-ANA_BRNIK_','PASJA-RAV_','RATECE_','RATIT-VEC_','RUDNO-POL_'];
 async function loadArso(): Promise<Station[]> {
   const lists = await Promise.all(arsoStations.map(async id => {
     try {
