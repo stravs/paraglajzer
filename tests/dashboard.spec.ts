@@ -109,9 +109,10 @@ test('Zemljevid: live markers, site panel with wind graph only',async({page})=>{
   await expect(page.locator('header')).toHaveCount(0);
   const peter=page.locator('.maplibregl-marker[title^="Sv. Peter"]');
   await expect(peter).toBeAttached({timeout:45000});
-  // Only Gorenjska (and Kamnik) stations: a few dozen, none from other regions.
-  expect(await page.locator('.maplibregl-marker[title*=" · veter "]').count()).toBeGreaterThan(15);
-  await expect(page.locator('.maplibregl-marker[title^="Donačka gora"]')).toHaveCount(0);
+  // Skytech covers all of Slovenia; vetr, ARSO and Luftar only Gorenjska (and Kamnik).
+  expect(await page.locator('.maplibregl-marker[title*=" · veter "]').count()).toBeGreaterThan(40);
+  await expect(page.locator('.maplibregl-marker[title^="Donačka gora"]')).toHaveCount(1);
+  await expect(page.locator('.maplibregl-marker[title^="Bilje"]')).toHaveCount(0); // ARSO outside Gorenjska stays off
   await expect(page.locator('.maplibregl-marker[title^="Velika planina"]')).toHaveCount(1); // Kamnik is included
   // Gozd and Vogar have both vetr and Skytech stations; only vetr is shown.
   await expect(page.locator('.maplibregl-marker[title^="Gozd"]')).toHaveCount(1);
@@ -119,7 +120,7 @@ test('Zemljevid: live markers, site panel with wind graph only',async({page})=>{
   await expect(page.locator('.maplibregl-marker[title^="Vogar - Bohinj"]')).toHaveCount(1);
   // Kriška gora: only the Luftar station; the offline Skytech one is left out.
   await expect(page.locator('.maplibregl-marker[title^="Kriška gora"]')).toHaveCount(1);
-  await expect(page.locator('.maplibregl-marker[title^="Stol "]')).toHaveCount(1); // Karavanke; Stol (Kobarid) is not in Gorenjska
+  await expect(page.locator('.maplibregl-marker[title^="Stol "]')).toHaveCount(2); // Karavanke (vetr) and Kobarid (Skytech)
   expect(keys.some(key=>key.startsWith('history:'))).toBe(false);
   await peter.dispatchEvent('click'); // Neighbouring markers overlap at the start zoom.
   await expect(page.locator('#site')).toBeVisible();
@@ -152,6 +153,8 @@ test('Zemljevid: search finds a site without diacritics and opens it',async({pag
   await page.getByRole('link',{name:'Napoved',exact:true}).click();await expect(page).toHaveURL(/\/napoved\//);
 });
 test('Zemljevid: layers (wind on, webcams off by default); webcam images load only when opened',async({page})=>{
+  // Phone view: it starts zoomed in on the home sites, where camera icons show (from zoom 9).
+  await page.setViewportSize({width:390,height:844});
   const images:string[]=[];
   page.on('request',request=>{if(request.resourceType()==='image'&&/Dobrca/.test(request.url()))images.push(request.url());});
   await page.goto(base);

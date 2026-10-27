@@ -77,7 +77,9 @@ test('station listings keep a missing station while its reading is under 2 h old
   const merged=keepMissing([station('a','2026-10-27T09:50:00Z')],[station('a','2026-10-27T09:20:00Z'),station('b','2026-10-27T09:30:00Z'),station('c','2026-10-27T07:00:00Z'),station('d',null)],now);
   assert.deepEqual(merged.map(s=>[s.id,s.observedAt]),[['a','2026-10-27T09:50:00Z'],['b','2026-10-27T09:30:00Z']]);
   assert.equal(keepMissing([station('a',null)],null,now).length,1);
-  assert.equal(keepMissing([],[{...station('far','2026-10-27T09:50:00Z'),location:[46.26,15.74]}],now).length,0);
+  // Outside Gorenjska only Skytech stations are kept.
+  assert.equal(keepMissing([],[{...station('far','2026-10-27T09:50:00Z'),source:'vetr' as const,location:[46.26,15.74]}],now).length,0);
+  assert.equal(keepMissing([],[{...station('far','2026-10-27T09:50:00Z'),location:[46.26,15.74]}],now).length,1);
 });
 test('ARSO stations come from per-station latest files, Lesce included',()=>{
   assert.ok(arsoStations.includes('LESCE_'));

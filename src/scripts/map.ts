@@ -1,10 +1,11 @@
 import { Map as MapLibre,Marker,NavigationControl,Popup,setWorkerUrl } from 'maplibre-gl';
+import { LogoControl } from '@maptoolkit/maplibre-logo-control';
+import '@maptoolkit/maplibre-logo-control/style.css';
 // MapLibre finds its worker next to its own module, which Vite moves; point it at the real file.
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import type { Station } from '../lib/sources';
 import type { WindSample } from '../lib/history';
 import { webcams,type Webcam } from '../lib/webcams';
-import { coveredBounds } from '../lib/gorenjska';
 import { $,escape,date,freshness,read,save,source,sourceLabel,startPolling,type Snapshot } from './weather';
 import { windCharts,sampleLabel,sampleReading } from './wind-charts';
 
@@ -12,30 +13,30 @@ import { windCharts,sampleLabel,sampleReading } from './wind-charts';
 // compass angles. Zoomed out, OpenTopoMap tints mountains orange by height, so its colour is washed
 // out there and comes back gradually by zoom 10.
 setWorkerUrl(workerUrl);
+const hiddenMapLayers=new Set(['road_hiking','road_hiking_label','road_hiking_shield','road_hiking_node_shield']);
+// The browser remembers the last map position and reopens there. Without one (first visit, storage
+// blocked), desktop starts on all of Slovenia (all stations) and phones on the home sites
+// Sv. Peter, Stol (Karavanke) and Gozd, with the search bar at the bottom.
+const savedView=read<{center?:unknown;zoom?:unknown}|null>('mapView',null);
+const hasSavedView=Array.isArray(savedView?.center)&&savedView.center.length===2&&savedView.center.every(Number.isFinite)&&Number.isFinite(savedView?.zoom);
 const map=new MapLibre({
-  // Desktop starts on the whole covered area (all stations); phones start on the home sites Sv. Peter,
-  // Stol (Karavanke) and Gozd, with the search bar at the bottom.
-  container:'map',...(matchMedia('(min-width: 768px)').matches
-    ?{bounds:coveredBounds,fitBoundsOptions:{padding:{top:70,bottom:40,left:40,right:60}}}
-    :{bounds:[[14.17,46.34],[14.34,46.44]],fitBoundsOptions:{padding:{top:60,bottom:110,left:60,right:60}}}),maxPitch:0,dragRotate:false,touchPitch:false,attributionControl:{compact:true},
-  style:{
-    version:8,
-    sources:{
-      topo:{type:'raster',tiles:['a','b','c'].map(s=>`https://${s}.tile.opentopomap.org/{z}/{x}/{y}.png`),tileSize:256,maxzoom:17,
-        attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, SRTM · <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)'},
-    },
-    layers:[{id:'topo',type:'raster',source:'topo',paint:{
-      'raster-saturation':['interpolate',['linear'],['zoom'],8,-0.85,10,0],
-      'raster-brightness-min':['interpolate',['linear'],['zoom'],8,0.4,10,0],
-    }}],
-  },
+  container:'map',...(hasSavedView
+    ?{center:savedView!.center as [number,number],zoom:savedView!.zoom as number}
+    :matchMedia('(min-width: 768px)').matches
+    ?{bounds:[[13.38,45.42],[16.6,46.88]],fitBoundsOptions:{padding:{top:70,bottom:40,left:40,right:60}}}
+    :{bounds:[[14.17,46.34],[14.34,46.44]],fitBoundsOptions:{padding:{top:60,bottom:110,left:60,right:60}}}),maxPitch:0,dragRotate:false,touchPitch:false,attributionControl:{compact:false},
+  // Maptoolkit "Hiking" (vector, hillshading, contours; free, no key) without its red hiking-route lines,
+  // route names and route-number badges.
+  style:'https://styles.maptoolkit.org/hiking.json',
+  transformStyle:(_previous,next)=>({...next,layers:next.layers.filter(layer=>!hiddenMapLayers.has(layer.id))}),
 });
 map.touchZoomRotate.disableRotation();map.keyboard.disableRotation();
-// The attribution is a small (i) button that expands on tap; MapLibre opens it on load, so close it.
-map.once('load',()=>{
-  const attribution=map.getContainer().querySelector('.maplibregl-ctrl-attrib');
-  attribution?.removeAttribute('open');attribution?.classList.remove('maplibregl-compact-show');
+map.on('moveend',()=>{
+  const {lng,lat}=map.getCenter();
+  save('mapView',{center:[+lng.toFixed(5),+lat.toFixed(5)],zoom:+map.getZoom().toFixed(2)});
 });
+// Maptoolkit's terms require its logo and a fully visible credit on the map.
+map.addControl(new LogoControl());
 map.addControl(new NavigationControl({showCompass:false}),'bottom-right');
 
 // Compass labels used by both vetr and Skytech tables; the wind comes from this direction.
@@ -209,12 +210,11 @@ function renderHistory() {
   const status=$('site-history-status');
   status.textContent=historyError||(historyLoading?'Nalaganje…':stale?'Zastarele meritve':!samples.length?'Ni meritev.':'');
   status.className=`mb-2 text-xs empty:hidden ${historyError||stale?'text-amber-700':'text-zinc-500'}`;
-  if(!samples.length){$('site-reading').innerHTML='';$('site-charts').innerHTML='';$('site-range').textContent='';return;}
+  if(!samples.length){$('site-reading').innerHTML='';$('site-charts').innerHTML='';return;}
   const found=selectedTime?samples.findIndex(sample=>sample.timestamp===selectedTime):-1;
   const index=found<0?samples.length-1:found;
   $('site-reading').innerHTML=sampleReading(samples[index]);
   $('site-charts').innerHTML=windCharts(samples,index,$('site-charts').clientWidth||400);
-  $('site-range').textContent=`${date(samples[0].timestamp)}–${date(latest!.timestamp)} · Europe/Ljubljana`;
 }
 async function loadHistory() {
   if(!selected)return;
@@ -240,14 +240,15 @@ function openSite(id:string) {
   selected=station;
   $('site').hidden=false;
   renderHeader();renderMarkers();
-  // Keep the marker visible beside (desktop) or above (mobile) the panel.
-  const {clientWidth:width,clientHeight:height}=map.getContainer();
-  const point=map.project([station.location![1],station.location![0]]);
-  const wide=matchMedia('(min-width: 768px)').matches;
-  const target=wide?[(width-440)/2,height/2]:[width/2,height*0.15];
-  map.panBy([point.x-target[0],point.y-target[1]]);
+  // Desktop: the map stays as it is. Phones: move the marker above the bottom sheet so it stays visible.
+  if(!matchMedia('(min-width: 768px)').matches) {
+    const {clientWidth:width,clientHeight:height}=map.getContainer();
+    const point=map.project([station.location![1],station.location![0]]);
+    map.panBy([point.x-width/2,point.y-height*0.15]);
+  }
   void loadHistory();
-  $('site-close').focus({preventScroll:true});
+  // Focus the panel itself (no highlighted button); Tab then reaches the close button.
+  $('site').focus({preventScroll:true});
 }
 function closeSite() {
   const id=selected?.id;
@@ -270,9 +271,9 @@ function showSample(index:number) {
   if(!sample||sample.timestamp===selectedTime)return;
   selectedTime=sample.timestamp;renderHistory();
 }
-// Mouse: hovering shows the reading there; leaving goes back to the latest. Touch: a tap shows it.
-// The graph always fits the panel width, so it never scrolls.
-$('site-charts').addEventListener('pointermove',event=>{if(event.pointerType==='mouse')showSample(sampleAt(event.clientX));});
+// Mouse: hovering shows the reading there; leaving goes back to the latest. Touch: a tap or a sideways
+// slide shows it (the graph takes sideways drags, `touch-action: pan-y`; vertical swipes still scroll).
+$('site-charts').addEventListener('pointermove',event=>showSample(sampleAt(event.clientX)));
 $('site-charts').addEventListener('pointerleave',event=>{if(event.pointerType==='mouse'&&selectedTime!==null){selectedTime=null;renderHistory();}});
 $('site-charts').addEventListener('click',event=>showSample(sampleAt(event.clientX)));
 $('site-charts').addEventListener('keydown',event=>{

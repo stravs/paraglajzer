@@ -21,10 +21,11 @@ import Layout from '../layouts/Layout.astro';
     <ul id="search-results" role="listbox" aria-label="Zadetki" hidden class="max-h-[50dvh] overflow-y-auto rounded-lg bg-white py-1 shadow-md max-md:flex-col-reverse max-md:[&:not([hidden])]:flex md:max-h-80"></ul>
     <p id="map-status" role="status" class="w-fit rounded bg-white/90 px-2 py-1 text-xs text-zinc-600 empty:hidden">Nalaganje…</p>
   </div>
-  <aside id="site" hidden aria-labelledby="site-name" class="absolute inset-x-0 bottom-0 z-[1000] max-h-[70%] overflow-y-auto border-t border-zinc-300 bg-white px-3 pb-6 shadow-lg md:inset-y-0 md:right-0 md:left-auto md:max-h-none md:w-[440px] md:border-t-0 md:border-l">
+  <!-- Site panel: bottom sheet on phones; on desktop a card at the top right, only as tall as its content. -->
+  <aside id="site" hidden tabindex="-1" aria-labelledby="site-name" class="outline-none absolute inset-x-0 bottom-0 z-[1000] max-h-[70%] overflow-y-auto border-t border-zinc-300 bg-white px-3 pb-6 shadow-lg md:top-2 md:right-2 md:bottom-auto md:left-auto md:max-h-[calc(100%-1rem)] md:w-[440px] md:rounded-lg md:border md:border-zinc-200 md:pb-4">
     <div class="sticky top-0 z-10 -mx-3 flex items-start justify-between gap-2 border-b border-zinc-200 bg-white px-3 py-2">
       <div class="min-w-0">
-        <h2 id="site-name" class="font-medium break-words"></h2>
+        <h2 id="site-name" class="text-lg leading-snug font-semibold break-words"></h2>
         <p id="site-meta" class="text-[10px] text-zinc-500"></p>
       </div>
       <button id="site-close" class="min-h-10 min-w-10 text-lg text-zinc-500 hover:text-black" aria-label="Zapri">×</button>
@@ -33,8 +34,7 @@ import Layout from '../layouts/Layout.astro';
       <p id="site-history-status" role="status" class="mb-2 text-xs text-zinc-500 empty:hidden"></p>
       <output id="site-reading" for="site-charts" class="mb-3 block text-base tabular-nums"></output>
       <!-- Hover (or tap) the graph to read a moment; ← → Home End when focused. -->
-      <div id="site-charts" tabindex="0" aria-label="Zgodovina vetra; s puščicama izberete meritev" class="rounded outline-none focus-visible:ring-2 focus-visible:ring-blue-600"></div>
-      <p id="site-range" class="mt-1 text-[10px] text-zinc-500"></p>
+      <div id="site-charts" tabindex="0" aria-label="Zgodovina vetra; s puščicama izberete meritev" class="touch-pan-y rounded outline-none focus-visible:ring-2 focus-visible:ring-blue-600"></div>
     </section>
   </aside>
   <script src="../scripts/map.ts"></script>

@@ -53,7 +53,7 @@ test('chart fits the width and still shows every direction arrow in one row (shr
   assert.equal(Number(html.match(/data-chart="wind"[^>]*width="(\d+)"/)![1]),400-54+16); // never wider than the panel
   const indexes=[...html.matchAll(/data-history-index="(\d+)"/g)].map(m=>Number(m[1]));
   assert.equal(indexes.length,60);
-  assert.ok(!html.includes(' 166) rotate(')&&/ 175\) rotate\(270\) scale\(0\.\d+\)/.test(html)); // one row, shrunk
+  assert.ok(!html.includes(' 166) rotate(')&&/ 15\) rotate\(270\) scale\(0\.\d+\)/.test(html)); // one row, shrunk
   assert.equal(html.match(/data-xs="([^"]*)"/)![1].split(',').length,60); // every reading can still be picked
 });
 test('reading spells out direction on its own line, with the same values as the plain label',()=>{

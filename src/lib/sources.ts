@@ -20,10 +20,11 @@ export interface Source { url: string; interval: number; load?: () => Promise<un
 export function keepMissing(stations: Station[], previous: unknown, now = Date.now()): Station[] {
   if (!Array.isArray(previous)) return stations;
   const ids = new Set(stations.map(s => s.id));
-  // Only stations inside the covered area (an older cached listing may still hold all of Slovenia), and
-  // only ARSO stations still on the list (one removed on purpose should not linger).
+  // Only stations inside the covered area (Skytech: all of Slovenia; others: Gorenjska and Kamnik, as an
+  // older cached listing may hold more), and only ARSO stations still on the list (one removed on
+  // purpose should not linger).
   return [...stations, ...(previous as Station[]).filter(s => !ids.has(s.id) && now - Date.parse(s.observedAt ?? '') < 2 * 3600000
-    && s.location !== null && inGorenjska(s.location) && (s.source !== 'arso' || arsoStations.includes(s.id.slice(5))))];
+    && (s.source === 'skytech' || (s.location !== null && inGorenjska(s.location))) && (s.source !== 'arso' || arsoStations.includes(s.id.slice(5))))];
 }
 export function plain(s: string): string {
   return s.replace(/<[^>]*>/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&deg;/g, '°').replace(/\s+/g, ' ').trim();
@@ -220,8 +221,9 @@ export function parseThermals(xml: string) {
     return { title:plain(item.title), text:plain(item.description), maxLift };
   }) };
 }
-// For now only stations inside Gorenjska leave the Worker, all labelled Gorenjska. Station history is
-// only served for stations in a cached listing, so it is limited to Gorenjska too.
+// vetr, ARSO and Luftar stations are limited to Gorenjska (plus Kamnik), labelled Gorenjska; Skytech
+// covers all of Slovenia with its own region labels. Station history is only served for stations in a
+// cached listing, so it follows the same rule.
 const gorenjska = (stations: Station[]): Station[] =>
   stations.filter(s => s.location !== null && inGorenjska(s.location)).map(s => ({ ...s, region: 'Gorenjska' }));
 // Station listings, served together as key 'stations'.
@@ -240,7 +242,7 @@ export function sourceFor(key: string, anchor?: string): Source | null {
   if (arsoHistory) return { url:`${ARSO}/uploads/probase/www/observ/surface/text/sl/recent/observationAms_${arsoHistory[1]}history.xml`, interval:600, parse:parseArsoHistory };
   if (key === 'arso') return { url:ARSO, interval:600, stations:true, load:async () => gorenjska(await loadArso()) };
   if (key === 'vetr') return { url:'https://vetr.si/', interval:600, stations:true, parse:body => gorenjska(parseVetr(body)) };
-  if (key === 'skytech') return { url:'https://skytech.si/skytechsys/data.php', interval:600, init:{method:'POST', body:'c=tabela', headers:{'Content-Type':'application/x-www-form-urlencoded'}}, stations:true, parse:body => gorenjska(parseSkytech(body)) };
+  if (key === 'skytech') return { url:'https://skytech.si/skytechsys/data.php', interval:600, init:{method:'POST', body:'c=tabela', headers:{'Content-Type':'application/x-www-form-urlencoded'}}, stations:true, parse:parseSkytech };
   if (key === 'aviation') return { url:`${ARSO}/uploads/probase/www/aviation/fproduct/text/sl/aviation.txt`, interval:600, parse:body => body.replace(/\^/g,'Č').replace(/~/g,'č').replace(/\[/g,'Š').replace(/\{/g,'š').replace(/@/g,'Ž').replace(/`/g,'ž') };
   if (key === 'sounding') return { url:`${ARSO}/uploads/probase/www/aviation/observ/upper/graphic/sigps_ljubljana-bezigrad.png`, interval:1800, image:true };
   if (key === 'radar') return { url:`${ARSO}/uploads/probase/www/observ/radar/si0_zm_si_latest.jpg`, interval:300, image:true };
