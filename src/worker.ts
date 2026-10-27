@@ -94,7 +94,8 @@ export class SourceCache extends DurableObject<Env> {
       headers.set('User-Agent','Paraglajzer/0.1 (shared paragliding weather cache)');
       if (previous?.etag) headers.set('If-None-Match',previous.etag);
       if (previous?.modified) headers.set('If-Modified-Since',previous.modified);
-      const response=await fetch(source.url,{...source.init,headers,signal:AbortSignal.timeout(12000)});
+      // Skytech's table takes 4–10 s to arrive, so allow 20 s.
+      const response=await fetch(source.url,{...source.init,headers,signal:AbortSignal.timeout(20000)});
       let entry: Snapshot;
       if (response.status===304 && previous?.fetchedAt) {
         entry={...previous, checkedAt:now, nextCheck:nextDue(now,source.interval), failures:0,error:null};
@@ -116,7 +117,9 @@ export class SourceCache extends DurableObject<Env> {
     } catch (error) {
       const failures=(previous?.failures || 0)+1;
       const entry: Snapshot={...previous, data:previous?.data ?? null,fetchedAt:previous?.fetchedAt ?? null, checkedAt:now,
-        nextCheck:Math.max(retryAt,now+Math.min(source.interval*2**Math.min(failures,5),21600)*1000),
+        // Retry after 1, 2, 4, 8 … minutes (at most 6 h): a one-off slow response clears quickly, a provider
+        // that is down is still asked rarely. Retries only happen while someone has the app open.
+        nextCheck:Math.max(retryAt,now+Math.min(60*2**(failures-1),21600)*1000),
         failures,error:error instanceof Error ? error.message : 'Source unavailable'};
       await this.ctx.storage.put(key,entry);
       return entry;

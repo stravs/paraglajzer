@@ -16,7 +16,7 @@ function loadStations():Promise<void> {
   if(Date.now()<stationsDue)return Promise.resolve();
   stationsTask??=(async()=>{
     try {
-      const response=await fetch('/api/source?key=stations',{signal:AbortSignal.timeout(25000)});
+      const response=await fetch('/api/source?key=stations',{signal:AbortSignal.timeout(30000)});
       if(!response.ok)throw new Error(`HTTP ${response.status}`);
       const result=await response.json() as {sources:Record<string,Snapshot<unknown>>;nextCheck:number};
       for(const key of stationKeys)if(result.sources[key])snapshots.set(key,result.sources[key]);
@@ -37,7 +37,7 @@ export async function source<T>(key:string):Promise<Snapshot<T>> {
   let task=pending.get(key);
   if(!task) {
     task=(async()=>{
-      const response=await fetch(`/api/source?key=${encodeURIComponent(key)}`,{signal:AbortSignal.timeout(25000)});
+      const response=await fetch(`/api/source?key=${encodeURIComponent(key)}`,{signal:AbortSignal.timeout(30000)});
       if(!response.ok) throw new Error(`HTTP ${response.status}`);
       const snapshot=await response.json() as Snapshot<unknown>;
       snapshots.set(key,snapshot);return snapshot;
@@ -52,7 +52,7 @@ const images=new Map<string,CachedImage>();
 export async function imageSource(key:string):Promise<CachedImage> {
   const previous=images.get(key);
   if(previous && Date.now()<previous.expires) return previous;
-  const response=await fetch(`/api/source?key=${encodeURIComponent(key)}`,{signal:AbortSignal.timeout(25000)});
+  const response=await fetch(`/api/source?key=${encodeURIComponent(key)}`,{signal:AbortSignal.timeout(30000)});
   if(!response.ok || !response.headers.get('Content-Type')?.startsWith('image/')) throw new Error('Slika ni na voljo');
   const interval=key==='radar'?300:key==='sounding'?1800:86400;
   const result={url:URL.createObjectURL(await response.blob()),stale:response.headers.get('X-Source-Stale')==='true',fetchedAt:Number(response.headers.get('X-Fetched-At')),expires:Date.now()+interval*1000};
