@@ -82,16 +82,18 @@ let selected:Station|null=null;
 const markers=new Map<string,Marker>(),labels=new Map<string,Marker>();
 
 // A slim navigation-style arrow pointing where the wind blows (compass direction + 180°), in flying bands
-// (green up to 4 m/s, yellow to 7, orange to 10, red above): the inside shows the average, the outline the
+// (green up to 4 m/s, yellow to 7, orange to 10, red above): the inner arrow shows the average, the outer one the
 // gusts. A thin dark edge keeps every colour visible on light and green map areas. Its label is a white pill just below: average bold, gusts
 // lighter. Zoomed out, a smaller arrow with the rounded average only, so dense areas stay readable.
 // Stale stations are half transparent (solid on hover); the selected one gets a blue ring. Without a
 // direction, a dot replaces the arrow.
-// Drawn twice: a dark wide stroke underneath, then the shape filled with `fill` and stroked with `stroke` on top.
-function arrowShape(deg:number|undefined,fill:string,stroke=fill) {
-  const outline=(paint:string)=>deg===undefined?`<circle r="6" ${paint}/>`
-    :`<path transform="rotate(${deg+180})" d="M0 -14 L10 12 L0 6 L-10 12 Z" stroke-linejoin="round" ${paint}/>`;
-  return outline('fill="none" stroke="rgb(0 0 0 / 0.55)" stroke-width="6"')+outline(`fill="${fill}" stroke="${stroke}" stroke-width="3.5"`);
+// Drawn in three layers: a dark edge, the whole arrow in the `outer` (gusts) colour, and a smaller inner arrow in
+// the `inner` (average) colour with a black line around it. A sharp, narrow dart with a deep notch.
+function arrowShape(deg:number|undefined,inner:string,outer=inner) {
+  const shape=(paint:string,scale=1)=>deg===undefined?`<circle r="${6*scale}" ${paint}/>`
+    :`<path transform="rotate(${deg+180}) translate(0 2) scale(${scale}) translate(0 -2)" d="M0 -16 L8.5 13 L0 5 L-8.5 13 Z" stroke-linejoin="round" ${paint}/>`;
+  return shape('fill="none" stroke="rgb(0 0 0 / 0.55)" stroke-width="5"')+shape(`fill="${outer}" stroke="${outer}" stroke-width="2.5"`)
+    +shape(`fill="${inner}" stroke="black" stroke-width="${(1.3/0.55).toFixed(2)}"`,0.55);
 }
 function icon(station:Station) {
   const {stale}=freshness(station);
