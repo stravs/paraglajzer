@@ -15,9 +15,19 @@ import { layers } from '../lib/sources';
       <h2 id="thermal-title" class="mb-1 text-sm font-medium">Termika · <span id="thermal-region-name">Gorenjska</span></h2>
       <div id="thermals" class="grid grid-cols-2 gap-x-4 text-sm" aria-live="polite"></div><p id="thermal-meta" class="mt-1 text-xs text-zinc-500"></p>
     </section>
-    <!-- Phones: one chart at a time, swiped sideways (scroll snapping), with dots below. Wider screens: a 2-column grid. -->
-    <div id="regional-images" class="flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain [scrollbar-width:none] md:grid md:grid-cols-2 md:overflow-visible" aria-busy="true"></div>
-    <div id="regional-dots" class="mt-2 flex justify-center gap-1 md:hidden" aria-hidden="true"></div>
+    <!-- Phones: one forecast chart at a time, swiped sideways (scroll snapping), with dots below, then the measured
+         sounding on its own. Wider screens: all six in one 2-column grid (the chart row's own box is dropped). -->
+    <div class="md:grid md:grid-cols-2 md:gap-4">
+      <div id="regional-images" class="flex snap-x snap-mandatory gap-4 overflow-x-auto overscroll-x-contain [scrollbar-width:none] md:contents" aria-busy="true"></div>
+      <div id="regional-dots" class="mt-2 flex justify-center gap-1 md:hidden" aria-hidden="true"></div>
+      <figure class="mt-4 min-w-0 md:mt-0">
+        <figcaption class="flex flex-wrap items-center justify-between gap-2 py-2 text-xs">
+          <span class="font-semibold">Sondaža · Ljubljana</span>
+          <a href="https://meteo.arso.gov.si/uploads/probase/www/aviation/observ/upper/graphic/sigps_ljubljana-bezigrad.png" target="_blank" rel="noopener noreferrer" class="text-xs text-zinc-500">ARSO ↗</a>
+        </figcaption>
+        <div id="sounding-image" class="min-h-32 text-xs text-zinc-500">Nalaganje…</div>
+      </figure>
+    </div>
   </section>
   <section id="forecast" class="mt-6 border-t border-zinc-200 pt-4" aria-labelledby="forecast-title">
     <div class="mb-2 flex items-center justify-between gap-2"><h2 id="forecast-title" class="font-medium">ALADIN · Zaladin</h2><select id="layer" aria-label="Sloj napovedi" class="min-h-10 max-w-[65%] border border-zinc-300 bg-white px-2">{Object.entries(layers).map(([id,name])=><option value={id} selected={id==='2'}>{name}</option>)}</select></div>

@@ -7,34 +7,39 @@ import type { Station } from '../lib/sources';
 import type { WindSample } from '../lib/history';
 import { webcams,type Webcam } from '../lib/webcams';
 import { stationSpots } from '../lib/station-spots';
-import { skytechAds } from '../lib/skytech-ads';
 import { $,escape,date,freshness,read,save,source,sourceLabel,startPolling,type Snapshot } from './weather';
 import { windCharts,sampleLabel,sampleReading,windColor } from './wind-charts';
 import { windRose } from './rose';
 import type { WindRose } from '../lib/rose';
 
-// Flat, north-up OpenTopoMap (hillshaded, with contours): no tilt or rotation, so arrows keep true
-// compass angles. Zoomed out, OpenTopoMap tints mountains orange by height, so its colour is washed
-// out there and comes back gradually by zoom 10.
+// Flat, north-up Maptoolkit map (hillshaded, with contours): no tilt or rotation, so arrows keep true
+// compass angles.
 setWorkerUrl(workerUrl);
 // Maptoolkit layers left out for a cleaner flying map, by layer-id prefix: hiking routes, points of interest
 // (generic, drinking water, climbing, huts), buildings, paths, minor roads, railways, ferries, road
 // restrictions and walls, protected areas, province borders, rocks, land use and sea depth. Kept: terrain,
 // contours, peaks, places, water, major roads, cable cars and country borders.
 const hiddenMapLayers=['road_hiking','poi_generic','poi_drinking','poi_climbing','poi_hut','building_','road_path','road_minor',
-  'road_rail','road_ferry','road_restriction','road_walls','border_protected','border_admin_province','nature_rocks','nature_landuse','water_bathymetry'];
+  'road_rail','road_ferry','road_restriction','road_walls','border_protected','border_admin_province','nature_rocks','nature_landuse','water_bathymetry',
+  // The three soft "ambient occlusion" shadings: each loads its own extra-large elevation tiles (about half of
+  // all map bytes); the sharp hillshade on the same data stays.
+  'relief_hillshade_ao'];
 // A lighter style for a faster first load. A map tile is drawn only once all its fonts and images have arrived, so:
-// - labels use three font files (Ysabeau Regular, Bold, Italic) instead of eleven (other Ysabeau cuts, Noto Sans);
+// - all labels use one font (Ysabeau Regular) instead of eleven (other Ysabeau cuts, Noto Sans); each font
+//   costs ~160 KB for the Slovenian letters;
 // - the "nature" texture sprite (~0.8 MB, faint forest and tidal-flat patterns) and its layers are left out, as is
 //   the icon sprite that only hidden layers used;
-// - sources no remaining layer uses are dropped, so their TileJSON isn't fetched.
-const fontFor=(name:string)=>name.includes('Bold')?'Ysabeau Bold':name.includes('Italic')?'Ysabeau Italic':'Ysabeau Regular';
+// - sources no remaining layer uses are dropped, so their TileJSON isn't fetched;
+// - the hillshade's elevation tiles are drawn at 1024 px, so one zoom level coarser tiles are fetched: a quarter
+//   as many (about 0.9 MB instead of 3 MB zoomed in), and the shading looks the same.
+const font='Ysabeau Regular';
 function trimStyle(style:StyleSpecification):StyleSpecification {
-  const layers=(JSON.parse(JSON.stringify(style.layers).replace(/"(?:Ysabeau|Noto Sans)[^"]*"/g,font=>JSON.stringify(fontFor(font)))) as StyleSpecification['layers'])
+  const layers=(JSON.parse(JSON.stringify(style.layers).replace(/"(?:Ysabeau|Noto Sans)[^"]*"/g,JSON.stringify(font))) as StyleSpecification['layers'])
     .filter(layer=>!hiddenMapLayers.some(prefix=>layer.id.startsWith(prefix))&&!JSON.stringify(layer).includes('"nature:'));
   const used=new Set(layers.map(layer=>'source' in layer?layer.source:undefined));
   return {...style,layers,
-    sources:Object.fromEntries(Object.entries(style.sources).filter(([id])=>used.has(id))),
+    sources:Object.fromEntries(Object.entries(style.sources).filter(([id])=>used.has(id))
+      .map(([id,source])=>[id,id==='rgb-tiles'?{...source,tileSize:1024}:source])),
     sprite:Array.isArray(style.sprite)?style.sprite.filter(sprite=>sprite.id==='water'):style.sprite};
 }
 // Only Slovenia is shown: the map can't be moved or zoomed out far past it, so no tiles load for the rest of Europe.
@@ -314,23 +319,9 @@ function openSite(id:string) {
 // Open/close with a slide (up on phones, in from the right on desktop) and fade.
 const closedPanel=['invisible','opacity-0','max-md:translate-y-full','md:translate-x-8'];
 function setPanel(open:boolean) {for(const name of closedPanel)$('site').classList.toggle(name,!open);}
-// Under the graph, thanks to the station's data source (its block in #site-thanks). Skytech's block holds
-// Skytech's ads, each slot rotating every 5 s as on skytech.si. All ad images are fetched on first show, so a
-// turn swaps them without a blank moment.
-let adTimer=0,adTurn=0,adsLoaded=false;
+// Under the graph, thanks to the station's data source (its block in #site-thanks).
 function showThanks(source:Station['source']|null) {
-  clearInterval(adTimer);
   for(const block of $('site-thanks').querySelectorAll<HTMLElement>('[data-source]'))block.hidden=block.dataset.source!==source;
-  if(source!=='skytech')return;
-  if(!adsLoaded){for(const ad of skytechAds.flat())new Image().src=ad.image;adsLoaded=true;}
-  const turn=()=>{
-    $('site-thanks-slots').innerHTML=skytechAds.map(slot=>{
-      const ad=slot[adTurn%slot.length];
-      return `<a href="${ad.url}" target="_blank" rel="noopener"><img src="${ad.image}" width="300" height="250" alt="${new URL(ad.url).hostname}" class="h-auto w-full rounded"></a>`;
-    }).join('');
-    adTurn++;
-  };
-  turn();adTimer=window.setInterval(turn,5000);
 }
 // returnFocus: when closed from the keyboard, put focus back on the station's marker.
 function closeSite(returnFocus=false) {

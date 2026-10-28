@@ -57,11 +57,16 @@ import Layout from '../layouts/Layout.astro';
     <!-- vetr.si stations: wind rose of the last hour; see loadRose in map.ts. -->
     <section id="site-rose" hidden aria-label="Vetrna roža" class="mt-4 border-t border-zinc-200 pt-3"></section>
     <!-- Thanks to the station's data source, in that source's own look; map.ts shows the block for the
-         selected station's source (data-source) and rotates the Skytech ads. -->
+         selected station's source (data-source). -->
     <section id="site-thanks" aria-label="Vir podatkov" class="mt-4 border-t border-zinc-200 pt-3">
       <div data-source="skytech" hidden>
-        <h3 class="mb-2 text-xs text-zinc-500">Podatki od: <a href="https://skytech.si/" target="_blank" rel="noopener" class="underline">Skytech</a></h3>
-        <div id="site-thanks-slots" class="grid grid-cols-2 gap-2"></div>
+        <h3 class="mb-2 text-xs text-zinc-500">Podatki od:</h3>
+        <div class="grid grid-cols-2 gap-2">
+          <!-- skytech.si header: white wordmark on its blue sky gradient with clouds. -->
+          <a href="https://skytech.si/" target="_blank" rel="noopener" class="flex h-24 items-center justify-center rounded bg-[image:url(/logos/skytech-glare.png),linear-gradient(to_bottom,#0670C6,#088BF7_60%,#52AEFA)] bg-cover bg-no-repeat hover:brightness-110"><img src="/logos/skytech.png" alt="Skytech vremenske postaje" width="300" height="150" class="h-24 w-auto"></a>
+          <!-- KOK makes the Skytech stations and runs skytech.si ("Upravitelj spletne strani"); its banner from there. -->
+          <a href="https://www.kok.si/" target="_blank" rel="noopener" class="flex h-24 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-white hover:opacity-90"><img src="/logos/kok.png" alt="KOK, proizvodnja elektronskih naprav" width="300" height="108" class="h-auto max-h-full w-full object-contain"></a>
+        </div>
       </div>
       <div data-source="arso" hidden>
         <h3 class="mb-2 text-xs text-zinc-500">Podatki od:</h3>

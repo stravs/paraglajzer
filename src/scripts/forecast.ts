@@ -21,8 +21,8 @@ async function loadThermals() {
 // Chart images link to ARSO's original on desktop only; on phones they are swiped, so taps do nothing
 // (the caption's "ARSO ↗" link stays).
 const imageLinkClass='block max-md:pointer-events-none';
-// The measured Ljubljana sounding sits in the chart grid after the forecast soundings. It updates every
-// 30 min, while the regional charts only change with a new model run, so it refreshes on its own.
+// The measured Ljubljana sounding (napoved.astro) sits after the forecast charts. It updates every 30 min,
+// while the regional charts only change with a new model run, so it refreshes on its own.
 const soundingUrl='https://meteo.arso.gov.si/uploads/probase/www/aviation/observ/upper/graphic/sigps_ljubljana-bezigrad.png';
 async function loadSounding() {
   const target=document.getElementById('sounding-image');
@@ -81,15 +81,8 @@ async function loadRegionalCharts() {
         <a href="${escape(regionalImage(chart.key)!.url)}" target="_blank" rel="noopener noreferrer" class="text-xs text-zinc-500">ARSO ↗</a>
       </figcaption>
       <div id="regional-image-${index}" class="min-h-32 text-xs text-zinc-500">Nalaganje…</div>
-    </figure>`).join('')+`<figure class="w-full min-w-0 shrink-0 snap-center md:w-auto">
-      <figcaption class="flex flex-wrap items-center justify-between gap-2 py-2 text-xs">
-        <span class="font-semibold">Sondaža · Ljubljana (izmerjena)</span>
-        <a href="${soundingUrl}" target="_blank" rel="noopener noreferrer" class="text-xs text-zinc-500">ARSO ↗</a>
-      </figcaption>
-      <div id="sounding-image" class="min-h-32 text-xs text-zinc-500">Nalaganje…</div>
-    </figure>`;
+    </figure>`).join('');
     container.scrollLeft=0;renderDots();
-    void loadSounding();
     const statuses=await Promise.all(charts.map(async(chart,index)=>{
       try {
         const result=await imageSource(chart.key);

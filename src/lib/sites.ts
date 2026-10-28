@@ -35,7 +35,6 @@ export const locations:Record<string,[number,number]> = {
   'skytech-a449581bcff5cc80fd1dd792b12769df':[46.2747,14.5289], // Ambrož pod Krvavcem: OSM launch pri Slatnerju
   'skytech-1e05bd2be1a27948f71130ae18d0175a':[46.2977,14.6433], // Velika planina: OSM launch Gradišče
   'skytech-c440ca51f96db1089b10f4b560a632f8':[46.2821,13.8817], // Bohinjsko jezero: OSM Vogar landing by the lake
-  'skytech-663c0360a78bbf835b350de0b7c2231c':[46.5041,13.7957], // Kranjska gora: launch Kranjska Gora - Jug, 1586 m (given by user)
   'skytech-82d69f3b462900b351f3a98a14c3f793':[46.3122,14.4546], // Potoška gora: OSM launch
   'skytech-b80c1266094cabce865a616424be25d4':[46.4395,13.6547], // Mangrt
   'skytech-4512a867ca0d18bbd33ccdb36b0ea333':[46.1810,13.7793], // Kobala: OSM launch

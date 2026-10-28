@@ -79,8 +79,9 @@ function localTime(target: number): string {
   return new Date(utc).toISOString();
 }
 // Skytech stations left out everywhere: Kriška gora has been "na servisu" (offline) since 2025;
-// the Luftar Kriška gora station covers the site.
-const hiddenSkytech = new Set(['ef075856fd59824786203959f9c8c45c']);
+// the Luftar Kriška gora station covers the site. Kranjska gora (launch) has been offline since
+// July 2026; Kranjska Gora landing is kept.
+const hiddenSkytech = new Set(['ef075856fd59824786203959f9c8c45c', '663c0360a78bbf835b350de0b7c2231c']);
 export function parseSkytech(html: string, skew = 0): Station[] {
   let region = ''; const stations: Station[] = [];
   for (const chunk of html.split(/(?=<h1>)/)) {
