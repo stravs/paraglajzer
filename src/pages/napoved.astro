@@ -35,11 +35,9 @@ import { layers } from '../lib/sources';
   <section id="forecast" class="mt-6 border-t border-zinc-200 pt-4 max-md:order-1" aria-labelledby="forecast-title">
     <div class="mb-2 flex items-center justify-between gap-2"><h2 id="forecast-title" class="font-medium">ALADIN · Zaladin</h2><select id="layer" aria-label="Sloj napovedi" class="min-h-10 max-w-[65%] border border-zinc-300 bg-white px-2">{Object.entries(layers).map(([id,name])=><option value={id} selected={id==='2'}>{name}</option>)}</select></div>
     <p id="map-placeholder" class="py-6 text-zinc-500">Nalaganje…</p>
-    <!-- Frame viewer: arrows on each side, horizontal swipe on touch screens (vertical scroll still works). -->
+    <!-- Frame viewer: the slider below, or a horizontal swipe on touch screens (vertical scroll still works). -->
     <div id="forecast-viewer" class="relative mx-auto max-w-[740px] touch-pan-y">
       <img id="forecast-image" hidden class="h-auto w-full transition-opacity" alt="Napoved ALADIN" />
-      <button id="frame-prev" type="button" aria-label="Prejšnja napoved" disabled class="absolute top-1/2 left-2 grid size-14 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-zinc-900 shadow-lg ring-1 ring-black/10 hover:bg-white active:scale-95 disabled:invisible"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
-      <button id="frame-next" type="button" aria-label="Naslednja napoved" disabled class="absolute top-1/2 right-2 grid size-14 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-zinc-900 shadow-lg ring-1 ring-black/10 hover:bg-white active:scale-95 disabled:invisible"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
     </div>
     <div class="mx-auto max-w-[740px]">
       <p class="mt-2 flex flex-wrap items-baseline justify-between gap-x-2"><span id="map-time" class="text-base font-semibold"></span><span id="map-position" class="text-xs text-zinc-500"></span></p>

@@ -140,8 +140,6 @@ async function showFrame() {
   const frame=frames[current];
   if(!frame)return;
   const image=$<HTMLImageElement>('forecast-image');
-  $<HTMLButtonElement>('frame-prev').disabled=current===0;
-  $<HTMLButtonElement>('frame-next').disabled=current===frames.length-1;
   const slider=$<HTMLInputElement>('forecast-step');
   slider.max=String(frames.length-1);slider.value=String(current);slider.disabled=false;
   $('map-time').textContent=longDate(frame.validAt);
@@ -188,14 +186,14 @@ async function loadFrames() {
     if(version===layerVersion){
       $('forecast-image').hidden=true;$('map-placeholder').hidden=false;
       $('map-placeholder').textContent='Napoved ni na voljo.';
-      $<HTMLButtonElement>('frame-prev').disabled=$<HTMLButtonElement>('frame-next').disabled=$<HTMLInputElement>('forecast-step').disabled=true;
+      $<HTMLInputElement>('forecast-step').disabled=true;
     }
   }
 }
 $('layer').addEventListener('change',()=>{
   // Keep the current image (dimmed) until the new layer's frame arrives.
   ++frameVersion;frames=[];$('forecast-image').classList.add('opacity-60');
-  $<HTMLButtonElement>('frame-prev').disabled=$<HTMLButtonElement>('frame-next').disabled=$<HTMLInputElement>('forecast-step').disabled=true;
+  $<HTMLInputElement>('forecast-step').disabled=true;
   void loadFrames();
 });
 // The slider previews the time while dragging and loads the frame when released (one image, not every step).
@@ -204,8 +202,6 @@ $('forecast-step').addEventListener('input',()=>{
   if(frame){$('map-time').textContent=longDate(frame.validAt);$('map-position').textContent=`${+$<HTMLInputElement>('forecast-step').value+1} / ${frames.length}`;}
 });
 $('forecast-step').addEventListener('change',()=>{current=+$<HTMLInputElement>('forecast-step').value;void showFrame();});
-$('frame-prev').addEventListener('click',()=>step(-1));
-$('frame-next').addEventListener('click',()=>step(1));
 // Horizontal swipe on touch screens: at least 40 px, and more sideways than up/down.
 let touchStart:{x:number;y:number}|null=null;
 $('forecast-viewer').addEventListener('touchstart',event=>{const t=event.touches[0];touchStart={x:t.clientX,y:t.clientY};},{passive:true});

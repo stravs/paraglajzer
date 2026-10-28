@@ -2,7 +2,7 @@ import type { WindSample } from '../lib/history';
 export const clock=(timestamp:string)=>new Intl.DateTimeFormat('sl-SI',{timeZone:'Europe/Ljubljana',hour:'2-digit',minute:'2-digit'}).format(new Date(timestamp));
 const compass=['S','SV','V','JV','J','JZ','Z','SZ','S'];
 const directions=['Sever','Severovzhod','Vzhod','Jugovzhod','Jug','Jugozahod','Zahod','Severozahod'];
-// Flying bands, shared by the map arrows, the graph and the map legend: green up to 4 m/s, yellow to 7, orange
+// Flying bands, shared by the map arrows and the graph: green up to 4 m/s, yellow to 7, orange
 // to 10, red above. (The wind rose keeps vetr.si's own scale.)
 export const bands:[number,string][]=[[4,'#16a34a'],[7,'#eab308'],[10,'#f97316'],[Infinity,'#dc2626']];
 export const windColor=(value:number|null)=>value===null?'#a1a1aa':bands.find(([limit])=>value<=limit)![1];

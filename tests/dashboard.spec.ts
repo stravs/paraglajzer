@@ -40,12 +40,12 @@ test('Napoved: five regional charts plus the Ljubljana sounding, region switch, 
   await page.goto(`${base}/napoved/`);
   await expect(page.locator('#regional-images img, #sounding-image img')).toHaveCount(6,{timeout:45000});
   await expect(page.locator('#regional-meta')).toContainText('Napoved od ');
-  // ALADIN viewer: big arrows and a slider step through frames.
+  // ALADIN viewer: the slider steps through frames (arrow keys when focused).
   await expect(page.locator('#forecast-image')).toBeVisible({timeout:45000});
   const position=await page.locator('#map-position').textContent();
-  await page.locator('#frame-next').click();
+  await expect(page.locator('#forecast-step')).toBeEnabled();
+  await page.locator('#forecast-step').focus();await page.keyboard.press('ArrowRight');
   await expect(page.locator('#map-position')).not.toHaveText(position!);
-  // The slider follows the arrows.
   await expect(page.locator('#forecast-step')).toHaveValue(String(Number(position!.split('/')[0])));
   // One region picker on the page; it drives both the charts and the thermal forecast.
   await expect(page.locator('main select[aria-label="Regija"]')).toHaveCount(1);
