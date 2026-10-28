@@ -89,12 +89,12 @@ const markers=new Map<string,Marker>(),labels=new Map<string,Marker>();
 // direction, a dot replaces the arrow.
 // Drawn in three layers: the whole arrow in the `outer` (gusts) colour, a smaller inner arrow in the `inner`
 // (average) colour, both with the same thin dark edge. A sharp, narrow dart with a deep notch.
-const edge='rgb(0 0 0 / 0.55)',edgeWidth=1.25,innerScale=0.55;
+const edge='rgb(0 0 0 / 0.55)',edgeWidth=1.25,innerScale=0.7;
 function arrowShape(deg:number|undefined,inner:string,outer=inner) {
   const shape=(paint:string,scale=1)=>deg===undefined?`<circle r="${6*scale}" ${paint}/>`
     :`<path transform="rotate(${deg+180}) translate(0 2) scale(${scale}) translate(0 -2)" d="M0 -16 L8.5 13 L0 5 L-8.5 13 Z" stroke-linejoin="round" ${paint}/>`;
   // Outer: a dark stroke under a coloured one 2 × edgeWidth narrower leaves an edgeWidth dark rim outside.
-  return shape(`fill="none" stroke="${edge}" stroke-width="${2.5+2*edgeWidth}"`)+shape(`fill="${outer}" stroke="${outer}" stroke-width="2.5"`)
+  return shape(`fill="none" stroke="${edge}" stroke-width="${1.5+2*edgeWidth}"`)+shape(`fill="${outer}" stroke="${outer}" stroke-width="1.5"`)
     +shape(`fill="${inner}" stroke="${edge}" stroke-width="${(edgeWidth/innerScale).toFixed(2)}"`,innerScale);
 }
 function icon(station:Station) {
@@ -102,7 +102,7 @@ function icon(station:Station) {
   const isSelected=selected?.id===station.id;
   const fill=windColor(station.avg),stroke=windColor(station.gust??station.avg);
   const deg=degrees[station.direction];
-  const size=46;
+  const size=34;
   const shape=arrowShape(deg,fill,stroke);
   const fade=stale&&!isSelected?'opacity-50 hover:opacity-100':'';
   const arrow=`<svg viewBox="-18 -18 36 36" width="${size}" height="${size}" class="block overflow-visible drop-shadow-[0_1px_2px_rgb(0_0_0/0.35)] transition hover:scale-110 ${fade}">${shape}</svg>`;
