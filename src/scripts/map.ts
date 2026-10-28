@@ -8,7 +8,7 @@ import type { WindSample } from '../lib/history';
 import { webcams,type Webcam } from '../lib/webcams';
 import { stationSpots } from '../lib/station-spots';
 import { $,escape,date,freshness,read,save,source,sourceLabel,startPolling,type Snapshot } from './weather';
-import { windCharts,sampleLabel,sampleReading,windColor } from './wind-charts';
+import { windCharts,sampleLabel,sampleReading,windColor,bands } from './wind-charts';
 import { windRose } from './rose';
 import type { WindRose } from '../lib/rose';
 
@@ -82,7 +82,7 @@ let selected:Station|null=null;
 const markers=new Map<string,Marker>(),labels=new Map<string,Marker>();
 
 // A slim navigation-style arrow pointing where the wind blows (compass direction + 180°), coloured by the
-// stronger of average and gusts in flying bands: green up to 4 m/s, yellow to 7, orange to 10, red above.
+// stronger of average and gusts in the speed bands of wind-charts.ts (the wind rose's scale).
 // A white outline with a thin dark edge keeps every colour visible on light and green map areas. Its label is a white pill just below: average bold, gusts
 // lighter. Zoomed out, a smaller arrow with the rounded average only, so dense areas stay readable.
 // Stale stations are half transparent (solid on hover); the selected one gets a blue ring. Without a
@@ -210,7 +210,7 @@ const layerButtons={
 } as const;
 function setLayer(layer:keyof typeof layerButtons,on:boolean) {
   layers[layer]=on;save('layers',layers);
-  if(layer==='wind'){renderMarkers();if(!on&&selected)closeSite();}else showCameras();
+  if(layer==='wind'){renderMarkers();legend.hidden=!on;if(!on&&selected)closeSite();}else showCameras();
   const button=document.querySelector(`[data-layer="${layer}"]`);
   button?.setAttribute('aria-pressed',String(on));
   button?.classList.toggle('text-blue-600',on);button?.classList.toggle('text-zinc-400',!on);
@@ -229,6 +229,18 @@ map.addControl({
   },
   onRemove() {},
 },'bottom-right');
+
+// Legend of the arrow colours (speed bands, m/s); hidden with the wind layer. Desktop: above the Maptoolkit logo.
+// Phones: top left, below the header bar while it shows (the bottom holds the search bar).
+const legend=document.createElement('div');
+legend.className='maplibregl-ctrl rounded bg-white/90 px-2 py-1 text-[10px] leading-3 text-zinc-600 shadow-sm transition-[margin] duration-300 motion-reduce:transition-none max-md:group-data-[header]:mt-14!';
+legend.setAttribute('aria-label','Barve puščic: hitrost vetra (večja od povprečja in sunkov) v m/s');
+legend.innerHTML=`<div class="flex items-end gap-1"><div class="flex">${bands.map(([limit,color],i)=>`<div class="w-6"><div class="h-2" style="background:${color}"></div><div class="mt-0.5">${i?bands[i-1][0]:0}${limit===Infinity?'+':''}</div></div>`).join('')}</div><span>m/s</span></div>`;
+legend.hidden=!layers.wind;
+const legendControl={onAdd:()=>legend,onRemove:()=>legend.remove()};
+const phone=matchMedia('(max-width: 767px)');
+const placeLegend=()=>{if(legend.parentElement)map.removeControl(legendControl);map.addControl(legendControl,phone.matches?'top-left':'bottom-left');};
+placeLegend();phone.addEventListener('change',placeLegend);
 
 // ---- Site panel ----
 let history:Snapshot<WindSample[]>|null=null;
