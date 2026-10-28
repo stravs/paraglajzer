@@ -82,7 +82,7 @@ let selected:Station|null=null;
 const markers=new Map<string,Marker>(),labels=new Map<string,Marker>();
 
 // A slim navigation-style arrow pointing where the wind blows (compass direction + 180°), coloured by the
-// stronger of average and gusts in the speed bands of wind-charts.ts (the wind rose's scale).
+// stronger of average and gusts in flying bands: green up to 4 m/s, yellow to 7, orange to 10, red above.
 // A white outline with a thin dark edge keeps every colour visible on light and green map areas. Its label is a white pill just below: average bold, gusts
 // lighter. Zoomed out, a smaller arrow with the rounded average only, so dense areas stay readable.
 // Stale stations are half transparent (solid on hover); the selected one gets a blue ring. Without a

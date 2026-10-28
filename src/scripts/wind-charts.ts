@@ -1,11 +1,10 @@
 import type { WindSample } from '../lib/history';
-import { roseBands,roseColors } from '../lib/rose.ts';
 export const clock=(timestamp:string)=>new Intl.DateTimeFormat('sl-SI',{timeZone:'Europe/Ljubljana',hour:'2-digit',minute:'2-digit'}).format(new Date(timestamp));
 const compass=['S','SV','V','JV','J','JZ','Z','SZ','S'];
 const directions=['Sever','Severovzhod','Vzhod','Jugovzhod','Jug','Jugozahod','Zahod','Severozahod'];
-// Speed bands, shared by the map arrows, the graph and the wind rose (vetr.si's scale): blue up to 1 m/s,
-// teal-green to 2, green to 4, lime to 6, yellow to 8, orange to 10, red above.
-export const bands:[number,string][]=[...roseBands,Infinity].map((limit,i)=>[limit,roseColors[i]]);
+// Flying bands, shared by the map arrows, the graph and the map legend: green up to 4 m/s, yellow to 7, orange
+// to 10, red above. (The wind rose keeps vetr.si's own scale.)
+export const bands:[number,string][]=[[4,'#16a34a'],[7,'#eab308'],[10,'#f97316'],[Infinity,'#dc2626']];
 export const windColor=(value:number|null)=>value===null?'#a1a1aa':bands.find(([limit])=>value<=limit)![1];
 const speed=(value:number|null)=>value===null?'—':value.toFixed(1);
 // ARSO gives exact degrees; vetr and Skytech give multiples of 45. Names use the nearest of 8 points.
@@ -57,7 +56,7 @@ export function windCharts(samples:WindSample[],selected:number,available=400):s
     const time=start+span*i/(count-1);
     return `<text x="${x(time)}" y="192" text-anchor="${i===0?'start':i===count-1?'end':'middle'}" fill="#71717a" font-size="10">${clock(new Date(time).toISOString())}</text>`;
   }).join('');
-  // Background: the speed bands as horizontal stripes at 35% opacity, so each line sits on the colour of its speed. The lines stay black (average) and grey (gusts).
+  // Background: the flying bands as horizontal stripes at 35% opacity, so each line sits on the colour of its speed. The lines stay black (average) and grey (gusts).
   const background=bands.map(([limit,color],i)=>{
     const from=i?bands[i-1][0]:0,to=Math.min(limit,top);
     return from<top?`<rect x="8" width="${plot}" y="${y(to).toFixed(1)}" height="${(y(from)-y(to)).toFixed(1)}" fill="${color}" fill-opacity="0.35"/>`:'';
