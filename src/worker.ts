@@ -1,6 +1,6 @@
 import { handle } from '@astrojs/cloudflare/handler';
 import { DurableObject } from 'cloudflare:workers';
-import { sourceFor, layers, keepMissing, stationKeys, type Frame, type Source, type Station } from './lib/sources';
+import { sourceFor, layers, keepMissing, stationKeys, clockSkew, type Frame, type Source, type Station } from './lib/sources';
 import { regionalCharts, type JadralciRun } from './lib/jadralci';
 
 // Browsers may keep a response until the server's next upstream check is due; nothing newer exists before then.
@@ -37,13 +37,21 @@ export class SourceCache extends DurableObject<Env> {
     }
     let source = sourceFor(key);
     if (!source) return new Response('Unknown source', {status:404});
-    // History is only fetched for stations in the cached listing; Skytech dates its graph from it.
-    if (key.startsWith('history:')) {
+    // History and wind roses are only fetched for stations in the cached listing; Skytech dates its graph from it.
+    let force = false;
+    if (key.startsWith('history:') || key.startsWith('rose:')) {
       const [,kind,id] = key.split(':');
       const list = await this.ctx.storage.get<Snapshot>(kind);
       const station = Array.isArray(list?.data) ? (list.data as Station[]).find(s => s.id === `${kind}-${id}`) : undefined;
       if (!station) return new Response('Load stations first', {status:404});
       source = sourceFor(key, station.observedAt ?? undefined)!;
+      // The listing and the graph are checked on their own schedules, so the listing can hold a newer reading
+      // than the cached graph. Then fetch the graph now, once per listing update (not again if the provider's
+      // graph itself still lacks the reading).
+      const graph = key.startsWith('history:') ? await this.ctx.storage.get<Snapshot>(key) : undefined;
+      const newest = Array.isArray(graph?.data) ? (graph.data as {timestamp:string}[]).at(-1)?.timestamp : undefined;
+      force = !!graph && !!list?.fetchedAt && graph.checkedAt < list.fetchedAt
+        && Date.parse(station.observedAt ?? '') > Date.parse(newest ?? '');
     }
     if (key.startsWith('frame:')) {
       const lists = await this.ctx.storage.get<Snapshot>(Object.keys(layers).map(id => `zaladin:${id}`));
@@ -56,7 +64,7 @@ export class SourceCache extends DurableObject<Env> {
       const known=manifest?.data && regionalCharts(manifest.data as JadralciRun,region).some(chart=>chart.key===key);
       if (!known) return new Response('Load the current Jadralci run first', {status:404});
     }
-    const entry = await this.cached(key, source);
+    const entry = await this.cached(key, source, force);
     if (source.image) {
       if (!(entry.data instanceof ArrayBuffer)) return new Response('Image unavailable', {status:503,headers:{'Cache-Control':'no-store'}});
       return new Response(entry.data, {headers:{
@@ -68,18 +76,18 @@ export class SourceCache extends DurableObject<Env> {
     return Response.json(view(entry), {headers:cacheUntil(entry.nextCheck)});
   }
   // Concurrent requests for a source share one in-flight check.
-  private cached(key: string, source: Source): Promise<Snapshot> {
+  private cached(key: string, source: Source, force = false): Promise<Snapshot> {
     let task = this.pending.get(key);
     if (!task) {
-      task = this.snapshot(key, source);
+      task = this.snapshot(key, source, force);
       this.pending.set(key, task);
       void task.finally(() => this.pending.delete(key)).catch(() => {});
     }
     return task;
   }
-  private async snapshot(key: string, source: Source): Promise<Snapshot> {
+  private async snapshot(key: string, source: Source, force = false): Promise<Snapshot> {
     const previous = await this.ctx.storage.get<Snapshot>(key);
-    if (previous && Date.now() < previous.nextCheck) return previous;
+    if (previous && Date.now() < previous.nextCheck && !force) return previous;
     const now=Date.now();
     let retryAt=0;
     try {
@@ -96,6 +104,7 @@ export class SourceCache extends DurableObject<Env> {
       if (previous?.modified) headers.set('If-Modified-Since',previous.modified);
       // Skytech's table takes 4–10 s to arrive, so allow 20 s.
       const response=await fetch(source.url,{...source.init,headers,signal:AbortSignal.timeout(20000)});
+      const skew=clockSkew(response.headers.get('Date'),Date.now());
       let entry: Snapshot;
       if (response.status===304 && previous?.fetchedAt) {
         entry={...previous, checkedAt:now, nextCheck:nextDue(now,source.interval), failures:0,error:null};
@@ -107,7 +116,7 @@ export class SourceCache extends DurableObject<Env> {
         }
         const contentType=response.headers.get('Content-Type') || '';
         if (source.image && !contentType.startsWith('image/')) throw new Error('Invalid image response');
-        const parsed=source.image ? await response.arrayBuffer() : source.parse!(await response.text());
+        const parsed=source.image ? await response.arrayBuffer() : source.parse!(await response.text(),skew);
         const data=source.stations ? keepMissing(parsed as Station[],previous?.data) : parsed;
         entry={data,fetchedAt:now,checkedAt:now,nextCheck:nextDue(now,source.interval),error:null,failures:0,
           etag:response.headers.get('ETag') || undefined,modified:response.headers.get('Last-Modified') || undefined,contentType};

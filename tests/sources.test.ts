@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { inGorenjska } from '../src/lib/gorenjska.ts';
-import { parseVetr, parseSkytech, parseFrames, parseThermals, parseArso, parseArsoHistory, parseLuftarHistory, keepMissing, arsoStations, ljubljanaTime, sourceFor } from '../src/lib/sources.ts';
+import { parseVetr, parseSkytech, parseFrames, parseThermals, parseArso, parseArsoHistory, parseLuftarHistory, keepMissing, arsoStations, ljubljanaTime, clockSkew, sourceFor } from '../src/lib/sources.ts';
 
 test('vetr exposes only normalized weather, not device credentials',()=>{
   const data=[{station:{active:true,name:'test',full_name:'Test',imsi:'secret'},prefsData:{prefs:{send_data_interval_min:'20',phoneNum:'secret'}},windData:{avg:0,max:2,dir:0,timestamp:'2026-10-26T12:00:00+01:00'}}];
@@ -19,6 +19,15 @@ test('Ljubljana local timestamps use winter and summer offsets',()=>{
   assert.equal(ljubljanaTime('12:00 15.01.2026'),'2026-01-15T11:00:00.000Z');
   assert.equal(ljubljanaTime('12:00 15.07.2026'),'2026-07-15T10:00:00.000Z');
   assert.equal(ljubljanaTime('offline'),null);
+});
+test('A fast provider clock is measured in whole minutes and taken off its times',()=>{
+  const received=Date.parse('2026-10-28T17:13:41Z');
+  assert.equal(clockSkew('Wed, 28 Oct 2026 17:18:39 GMT',received),300000); // Skytech, 4 min 58 s fast
+  assert.equal(clockSkew('Wed, 28 Oct 2026 17:13:52 GMT',received),0); // seconds of network delay
+  assert.equal(clockSkew(null,received),0);
+  assert.equal(ljubljanaTime('18:15 28.10.2026',300000),'2026-10-28T17:10:00.000Z');
+  const html=`<h1>Gorenjska</h1><table><tr><td><a onclick="show('graf','abcdef')">Vogel</a></td><td>1 m/s</td><td>2 m/s</td><td>S</td><td>8&deg;C</td><td>18:15 28.10.2026</td></tr></table>`;
+  assert.equal(parseSkytech(html,300000)[0].observedAt,'2026-10-28T17:10:00.000Z');
 });
 test('Zaladin uses only newest model run and normalizes to HTTPS',()=>{
   const html=['as_20261025-1200_r-t-vf850_si-neighbours_006.png','as_20261026-0000_r-t-vf850hPa_si-neighbours_012.png','as_20261026-0000_r-t-vf850hPa_si-neighbours_006.png'].map(f=>`<img src="http://meteo.arso.gov.si/uploads/probase/www/model/aladin/field/${f}">`).join('');

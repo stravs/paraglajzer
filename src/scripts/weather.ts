@@ -25,7 +25,8 @@ function loadStations():Promise<void> {
   })();
   return stationsTask;
 }
-export async function source<T>(key:string):Promise<Snapshot<T>> {
+// fresh: ask the server now, past the snapshot's next check and the browser cache.
+export async function source<T>(key:string,fresh=false):Promise<Snapshot<T>> {
   if(stationKeys.includes(key)) {
     await loadStations();
     const snapshot=snapshots.get(key);
@@ -33,11 +34,11 @@ export async function source<T>(key:string):Promise<Snapshot<T>> {
     return snapshot as Snapshot<T>;
   }
   const previous=snapshots.get(key);
-  if(previous && Date.now()<previous.nextCheck) return previous as Snapshot<T>;
+  if(previous && Date.now()<previous.nextCheck && !fresh) return previous as Snapshot<T>;
   let task=pending.get(key);
   if(!task) {
     task=(async()=>{
-      const response=await fetch(`/api/source?key=${encodeURIComponent(key)}`,{signal:AbortSignal.timeout(30000)});
+      const response=await fetch(`/api/source?key=${encodeURIComponent(key)}`,{cache:fresh?'no-cache':'default',signal:AbortSignal.timeout(30000)});
       if(!response.ok) throw new Error(`HTTP ${response.status}`);
       const snapshot=await response.json() as Snapshot<unknown>;
       snapshots.set(key,snapshot);return snapshot;

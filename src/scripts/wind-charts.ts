@@ -1,5 +1,5 @@
 import type { WindSample } from '../lib/history';
-const clock=(timestamp:string)=>new Intl.DateTimeFormat('sl-SI',{timeZone:'Europe/Ljubljana',hour:'2-digit',minute:'2-digit'}).format(new Date(timestamp));
+export const clock=(timestamp:string)=>new Intl.DateTimeFormat('sl-SI',{timeZone:'Europe/Ljubljana',hour:'2-digit',minute:'2-digit'}).format(new Date(timestamp));
 const compass=['S','SV','V','JV','J','JZ','Z','SZ','S'];
 const directions=['Sever','Severovzhod','Vzhod','Jugovzhod','Jug','Jugozahod','Zahod','Severozahod'];
 // Flying bands, shared by the map arrows and the graph: green up to 4 m/s, yellow to 7, orange to 10, red above.

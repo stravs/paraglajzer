@@ -77,6 +77,8 @@ test('Skytech history is dated from the table time and crosses midnight',()=>{
   assert.equal(data[2].avg,3);assert.equal(data[2].gust,4);
   // Graph a few minutes newer than the table stays on the same day.
   assert.equal(parseSkytechHistory(graph(['19:47'],[1],[1],[8]),'2026-10-26T18:37:00.000Z')[0].timestamp,'2026-10-26T18:47:00.000Z');
+  // A 5-minute-fast Skytech clock: 19:47 on its graph was 19:42 local.
+  assert.equal(parseSkytechHistory(graph(['19:47'],[1],[1],[8]),'2026-10-26T18:37:00.000Z',300000)[0].timestamp,'2026-10-26T18:42:00.000Z');
   assert.equal(parseSkytechHistory(graph(['19:47'],[1],[1],[8]),'2026-10-26T18:37:00.000Z')[0].direction,null);
   assert.throws(()=>parseSkytechHistory('<p>changed</p>','2026-10-26T18:37:00.000Z'));
 });

@@ -3,6 +3,7 @@ import { discoverJadralci, regionalImage, chartRegions, nearestRegion, thermalRe
 import { parseVetrHistory, chronological, speed, type WindSample } from './history.ts';
 import { locations } from './sites.ts';
 import { inGorenjska } from './gorenjska.ts';
+import { parseVetrRose } from './rose.ts';
 
 export const ARSO = 'https://meteo.arso.gov.si';
 // Zaladin layers offered on Napoved (the regional wind layers 6–10 are left out).
@@ -13,7 +14,7 @@ export interface Station {
   interval: number; note: string; location: [number, number] | null;
 }
 export interface Frame { url: string; run: string; validAt: string; }
-export interface Source { url: string; interval: number; load?: () => Promise<unknown>; init?: RequestInit; parse?: (body: string) => unknown; image?: boolean; stations?: boolean; }
+export interface Source { url: string; interval: number; load?: () => Promise<unknown>; init?: RequestInit; parse?: (body: string, skew: number) => unknown; image?: boolean; stations?: boolean; }
 // ARSO sometimes publishes a partial file mid-update (seen with 23 and 70 of ~100 stations), and a Luftar
 // file can fail on its own. So a station missing from a new listing keeps its previous reading while that
 // reading is under 2 h old; it then shows as stale instead of vanishing until the next check.
@@ -52,10 +53,18 @@ function coordinates(location: {lat?: unknown; lon?: unknown} | undefined): [num
   const lat = number(location?.lat), lon = number(location?.lon);
   return lat === null || lon === null ? null : [lat, lon];
 }
+// How far a provider's clock is ahead of ours, from its response's Date header (sent at `received`),
+// in whole minutes as its times have no seconds. Skytech's clock ran 5 min fast (seen 2026-10-28) and it
+// dates readings by it, so its times are moved back by this much.
+export function clockSkew(date: string | null, received: number): number {
+  const server = Date.parse(date ?? '');
+  return Number.isFinite(server) ? Math.round((server - received) / 60000) * 60000 : 0;
+}
+const shift = (iso: string, skew: number) => skew ? new Date(Date.parse(iso) - skew).toISOString() : iso;
 // Skytech publishes local Slovenian wall-clock times, without an offset.
-export function ljubljanaTime(text: string): string | null {
+export function ljubljanaTime(text: string, skew = 0): string | null {
   const m = text.match(/(\d{2}):(\d{2})\s+(\d{2})\.(\d{2})\.(\d{4})/);
-  return m ? localTime(Date.UTC(+m[5], +m[4]-1, +m[3], +m[1], +m[2])) : null;
+  return m ? shift(localTime(Date.UTC(+m[5], +m[4]-1, +m[3], +m[1], +m[2])), skew) : null;
 }
 // Takes a Ljubljana wall-clock time written as if it were UTC and returns the real instant.
 // Built once: creating an Intl.DateTimeFormat costs far more than using it, and this runs per reading.
@@ -72,7 +81,7 @@ function localTime(target: number): string {
 // Skytech stations left out everywhere: Kriška gora has been "na servisu" (offline) since 2025;
 // the Luftar Kriška gora station covers the site.
 const hiddenSkytech = new Set(['ef075856fd59824786203959f9c8c45c']);
-export function parseSkytech(html: string): Station[] {
+export function parseSkytech(html: string, skew = 0): Station[] {
   let region = ''; const stations: Station[] = [];
   for (const chunk of html.split(/(?=<h1>)/)) {
     region = plain(chunk.match(/<h1>(.*?)<\/h1>/s)?.[1] || region);
@@ -80,7 +89,7 @@ export function parseSkytech(html: string): Station[] {
       const cells = [...row[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map(m => plain(m[1]));
       const id = row[1].match(/show\('graf','([a-f0-9]+)'\)/)?.[1];
       if (cells.length !== 6 || !id || hiddenSkytech.has(id)) continue;
-      stations.push({ id: `skytech-${id}`, name: cells[0], region, source: 'skytech', url: 'https://skytech.si/', avg: number(cells[1]), gust: number(cells[2]), direction: cells[3], observedAt: ljubljanaTime(cells[5]), interval: 5, note: '', location: locations[`skytech-${id}`] ?? null });
+      stations.push({ id: `skytech-${id}`, name: cells[0], region, source: 'skytech', url: 'https://skytech.si/', avg: number(cells[1]), gust: number(cells[2]), direction: cells[3], observedAt: ljubljanaTime(cells[5], skew), interval: 5, note: '', location: locations[`skytech-${id}`] ?? null });
     }
   }
   if (!stations.length) throw new Error('Station table missing');
@@ -88,7 +97,8 @@ export function parseSkytech(html: string): Station[] {
 }
 // Skytech graphs give only HH:MM. The newest reading is dated from `anchor` (the table's
 // observation time) and each earlier reading steps back a day whenever the clock goes backwards.
-export function parseSkytechHistory(html: string, anchor: string): WindSample[] {
+// `skew` corrects Skytech's clock, as for the table (anchor is already corrected).
+export function parseSkytechHistory(html: string, anchor: string, skew = 0): WindSample[] {
   const [speedPart, directionPart = ''] = html.split("$('#dir')");
   const times = [...(speedPart.match(/categories:\s*\[([^\]]*)\]/)?.[1] || '').matchAll(/'(\d{2}):(\d{2})'/g)].map(m => +m[1]*60 + +m[2]);
   const series = (part: string) => [...part.matchAll(/data:\s*\[([^\]]*)\]/g)].map(m => m[1].split(',').map(v => v.trim()).filter(Boolean).map(Number));
@@ -98,7 +108,7 @@ export function parseSkytechHistory(html: string, anchor: string): WindSample[] 
   const p = Object.fromEntries(ljubljanaClock.formatToParts(anchorTime).map(p => [p.type,p.value]));
   const dayMs = 86400000;
   let day = Date.UTC(+p.year, +p.month-1, +p.day);
-  const at = (index: number) => localTime(day + times[index]*60000);
+  const at = (index: number) => shift(localTime(day + times[index]*60000), skew);
   if (Date.parse(at(times.length-1)) > anchorTime + 6*3600000) day -= dayMs;
   const samples: WindSample[] = [];
   for (let i = times.length-1; i >= 0; i--) {
@@ -233,8 +243,10 @@ export function sourceFor(key: string, anchor?: string): Source | null {
   const point=regionalImage(key);
   if (point) return { url:point.url, interval:86400, image:true };
   const history = key.match(/^history:(vetr|skytech):([a-z0-9_-]{1,40})$/);
+  const rose = key.match(/^rose:vetr:([a-z0-9_-]{1,40})$/);
+  if (rose) return { url:`https://vetr.si/${rose[1]}/data/wind_all.json?duration=1`, interval:600, parse:parseVetrRose };
   if (history?.[1] === 'vetr') return { url:`https://vetr.si/${history[2]}`, interval:600, parse:parseVetrHistory };
-  if (history?.[1] === 'skytech' && /^[a-f0-9]{32}$/.test(history[2])) return { url:'https://skytech.si/skytechsys/data.php', interval:600, init:{method:'POST', body:`c=graf&l=${history[2]}`, headers:{'Content-Type':'application/x-www-form-urlencoded'}}, parse:body => parseSkytechHistory(body, anchor ?? new Date().toISOString()) };
+  if (history?.[1] === 'skytech' && /^[a-f0-9]{32}$/.test(history[2])) return { url:'https://skytech.si/skytechsys/data.php', interval:600, init:{method:'POST', body:`c=graf&l=${history[2]}`, headers:{'Content-Type':'application/x-www-form-urlencoded'}}, parse:(body, skew) => parseSkytechHistory(body, anchor ?? new Date().toISOString(), skew) };
   if (key === 'luftar') return { url:'https://www.luftar.si/', interval:600, stations:true, load:async () => gorenjska(await loadLuftar()) };
   const luftarHistory = key.match(/^history:luftar:(kriska|sebenje)$/);
   if (luftarHistory) return { url:luftarUrl(luftarHistory[1] as keyof typeof luftarStations), interval:600, parse:parseLuftarHistory };

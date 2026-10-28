@@ -7,8 +7,11 @@ import type { Station } from '../lib/sources';
 import type { WindSample } from '../lib/history';
 import { webcams,type Webcam } from '../lib/webcams';
 import { stationSpots } from '../lib/station-spots';
+import { skytechAds } from '../lib/skytech-ads';
 import { $,escape,date,freshness,read,save,source,sourceLabel,startPolling,type Snapshot } from './weather';
 import { windCharts,sampleLabel,sampleReading,windColor } from './wind-charts';
+import { windRose } from './rose';
+import type { WindRose } from '../lib/rose';
 
 // Flat, north-up OpenTopoMap (hillshaded, with contours): no tilt or rotation, so arrows keep true
 // compass angles. Zoomed out, OpenTopoMap tints mountains orange by height, so its colour is washed
@@ -264,7 +267,11 @@ async function loadHistory() {
   const [kind,...rest]=selected.id.split('-');
   historyLoading=!history?.data;historyError='';renderHistory();
   try {
-    const result=await source<WindSample[]>(`history:${kind}:${rest.join('-')}`);
+    // The station listing can hold a newer reading than the graph (they are checked on their own schedules):
+    // then ask for the graph now, once per listing update.
+    const listing=await source<Station[]>(kind),newest=history?.data?.at(-1)?.timestamp;
+    const behind=!!history&&!!listing.fetchedAt&&history.checkedAt<listing.fetchedAt&&Date.parse(selected?.observedAt??'')>Date.parse(newest??'');
+    const result=await source<WindSample[]>(`history:${kind}:${rest.join('-')}`,behind);
     if(request!==historyRequest)return;
     history=result;
     historyError=result.error?(result.data?.length?'Napaka vira · zadnje shranjene meritve.':'Zgodovina ni na voljo.'):'';
@@ -275,10 +282,21 @@ async function loadHistory() {
   historyLoading=false;renderHistory();
 }
 
+// vetr.si stations also show a wind rose of the last hour; others hide it. Kept while a reload fails.
+let roseRequest=0;
+async function loadRose() {
+  const request=++roseRequest,station=selected;
+  if(station?.source!=='vetr'){$('site-rose').hidden=true;return;}
+  try {
+    const result=await source<WindRose>(`rose:vetr:${station.id.slice(5)}`);
+    if(request!==roseRequest)return;
+    if(result.data){$('site-rose').innerHTML=windRose(result.data);$('site-rose').hidden=false;}
+  } catch {/* The rose is extra; the graph shows the wind. */}
+}
 function openSite(id:string) {
   const station=stations.find(s=>s.id===id);
   if(!station)return;
-  if(selected?.id!==id){history=null;selectedTime=null;}
+  if(selected?.id!==id){history=null;selectedTime=null;$('site-rose').hidden=true;}
   selected=station;
   setPanel(true);
   renderHeader();renderMarkers();
@@ -288,18 +306,37 @@ function openSite(id:string) {
     const point=map.project([station.location![1],station.location![0]]);
     map.panBy([point.x-width/2,point.y-height*0.15]);
   }
-  void loadHistory();
+  void loadHistory();void loadRose();
+  showThanks(station.source);
   // Focus the panel itself (no highlighted button); Tab then reaches the close button.
   $('site').focus({preventScroll:true});
 }
 // Open/close with a slide (up on phones, in from the right on desktop) and fade.
 const closedPanel=['invisible','opacity-0','max-md:translate-y-full','md:translate-x-8'];
 function setPanel(open:boolean) {for(const name of closedPanel)$('site').classList.toggle(name,!open);}
+// Under the graph, thanks to the station's data source (its block in #site-thanks). Skytech's block holds
+// Skytech's ads, each slot rotating every 5 s as on skytech.si. All ad images are fetched on first show, so a
+// turn swaps them without a blank moment.
+let adTimer=0,adTurn=0,adsLoaded=false;
+function showThanks(source:Station['source']|null) {
+  clearInterval(adTimer);
+  for(const block of $('site-thanks').querySelectorAll<HTMLElement>('[data-source]'))block.hidden=block.dataset.source!==source;
+  if(source!=='skytech')return;
+  if(!adsLoaded){for(const ad of skytechAds.flat())new Image().src=ad.image;adsLoaded=true;}
+  const turn=()=>{
+    $('site-thanks-slots').innerHTML=skytechAds.map(slot=>{
+      const ad=slot[adTurn%slot.length];
+      return `<a href="${ad.url}" target="_blank" rel="noopener"><img src="${ad.image}" width="300" height="250" alt="${new URL(ad.url).hostname}" class="h-auto w-full rounded"></a>`;
+    }).join('');
+    adTurn++;
+  };
+  turn();adTimer=window.setInterval(turn,5000);
+}
 // returnFocus: when closed from the keyboard, put focus back on the station's marker.
 function closeSite(returnFocus=false) {
   const id=selected?.id;
   selected=null;++historyRequest;
-  setPanel(false);renderMarkers();
+  setPanel(false);renderMarkers();showThanks(null);
   if(id&&returnFocus)markers.get(id)?.getElement()?.focus({preventScroll:true});
 }
 // detail is 0 when the button is activated from the keyboard.
@@ -393,7 +430,7 @@ async function update() {
   if(selected) {
     selected=stations.find(s=>s.id===selected!.id)??selected;
     renderHeader();
-    await loadHistory();
+    await Promise.all([loadHistory(),loadRose()]);
   }
 }
 startPolling(update,()=>{renderMarkers();renderHeader();});
