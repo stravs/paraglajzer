@@ -13,6 +13,7 @@ const pages={Zemljevid:'/',Napoved:'/napoved/'} as const;
     <meta name="theme-color" content="#ffffff" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <title>{page} · Paraglajzer</title>
+    <slot name="head" />
   </head>
   <body class="bg-white font-sans text-sm text-zinc-900 antialiased">
     <a href="#content" class="sr-only focus:not-sr-only">Preskoči na podatke</a>

@@ -63,7 +63,7 @@ const objectUrls:string[]=[];
 window.addEventListener('pagehide',event=>{if(!event.persisted)objectUrls.forEach(url=>URL.revokeObjectURL(url));});
 export function startPolling(update:()=>Promise<unknown>,tick?:()=>void) {
   let busy=false,lastCheck=0;
-  // The map page has no header, so no refresh button or status.
+  // The map page has no refresh button or status.
   const button=document.getElementById('refresh') as HTMLButtonElement|null,status=document.getElementById('refresh-status');
   async function refresh() {
     if(busy) return;

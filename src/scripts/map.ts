@@ -1,4 +1,4 @@
-import { Map as MapLibre,Marker,NavigationControl,Popup,setWorkerUrl } from 'maplibre-gl';
+import { Map as MapLibre,Marker,NavigationControl,Popup,setWorkerUrl,type StyleSpecification } from 'maplibre-gl';
 import { LogoControl } from '@maptoolkit/maplibre-logo-control';
 import '@maptoolkit/maplibre-logo-control/style.css';
 // MapLibre finds its worker next to its own module, which Vite moves; point it at the real file.
@@ -6,6 +6,7 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import type { Station } from '../lib/sources';
 import type { WindSample } from '../lib/history';
 import { webcams,type Webcam } from '../lib/webcams';
+import { stationSpots } from '../lib/station-spots';
 import { $,escape,date,freshness,read,save,source,sourceLabel,startPolling,type Snapshot } from './weather';
 import { windCharts,sampleLabel,sampleReading,windColor } from './wind-charts';
 
@@ -19,6 +20,22 @@ setWorkerUrl(workerUrl);
 // contours, peaks, places, water, major roads, cable cars and country borders.
 const hiddenMapLayers=['road_hiking','poi_generic','poi_drinking','poi_climbing','poi_hut','building_','road_path','road_minor',
   'road_rail','road_ferry','road_restriction','road_walls','border_protected','border_admin_province','nature_rocks','nature_landuse','water_bathymetry'];
+// A lighter style for a faster first load. A map tile is drawn only once all its fonts and images have arrived, so:
+// - labels use three font files (Ysabeau Regular, Bold, Italic) instead of eleven (other Ysabeau cuts, Noto Sans);
+// - the "nature" texture sprite (~0.8 MB, faint forest and tidal-flat patterns) and its layers are left out, as is
+//   the icon sprite that only hidden layers used;
+// - sources no remaining layer uses are dropped, so their TileJSON isn't fetched.
+const fontFor=(name:string)=>name.includes('Bold')?'Ysabeau Bold':name.includes('Italic')?'Ysabeau Italic':'Ysabeau Regular';
+function trimStyle(style:StyleSpecification):StyleSpecification {
+  const layers=(JSON.parse(JSON.stringify(style.layers).replace(/"(?:Ysabeau|Noto Sans)[^"]*"/g,font=>JSON.stringify(fontFor(font)))) as StyleSpecification['layers'])
+    .filter(layer=>!hiddenMapLayers.some(prefix=>layer.id.startsWith(prefix))&&!JSON.stringify(layer).includes('"nature:'));
+  const used=new Set(layers.map(layer=>'source' in layer?layer.source:undefined));
+  return {...style,layers,
+    sources:Object.fromEntries(Object.entries(style.sources).filter(([id])=>used.has(id))),
+    sprite:Array.isArray(style.sprite)?style.sprite.filter(sprite=>sprite.id==='water'):style.sprite};
+}
+// Only Slovenia is shown: the map can't be moved or zoomed out far past it, so no tiles load for the rest of Europe.
+const slovenia:[[number,number],[number,number]]=[[12.9,45.1],[17.1,47.2]];
 // The browser remembers the last map position and reopens there. Without one (first visit, storage
 // blocked), desktop starts on all of Slovenia (all stations) and phones on the home sites
 // Sv. Peter, Stol (Karavanke) and Gozd, with the search bar at the bottom.
@@ -28,13 +45,16 @@ const map=new MapLibre({
   container:'map',...(hasSavedView
     ?{center:savedView!.center as [number,number],zoom:savedView!.zoom as number}
     :matchMedia('(min-width: 768px)').matches
-    ?{bounds:[[13.38,45.42],[16.6,46.88]],fitBoundsOptions:{padding:{top:70,bottom:40,left:40,right:60}}}
+    ?{bounds:[[13.38,45.42],[16.6,46.88]],fitBoundsOptions:{padding:{top:110,bottom:40,left:40,right:60}}}
     :{bounds:[[14.17,46.34],[14.34,46.44]],fitBoundsOptions:{padding:{top:60,bottom:110,left:60,right:60}}}),maxPitch:0,dragRotate:false,touchPitch:false,attributionControl:{compact:false},
-  // Maptoolkit "Hiking" (vector, hillshading, contours; free, no key), with the layers above left out.
+  // Maptoolkit "Hiking" (vector, hillshading, contours; free, no key), with the layers above left out (trimStyle).
   style:'https://styles.maptoolkit.org/hiking.json',
-  transformStyle:(_previous,next)=>({...next,layers:next.layers.filter(layer=>!hiddenMapLayers.some(prefix=>layer.id.startsWith(prefix)))}),
+  maxBounds:slovenia,
+  transformStyle:(_previous,next)=>trimStyle(next),
 });
 map.touchZoomRotate.disableRotation();map.keyboard.disableRotation();
+// On phones the header bar hides on the first move by the user (drag, zoom, keys); moves from code don't count.
+map.on('movestart',event=>{if(event.originalEvent)$('map-page').removeAttribute('data-header');});
 map.on('moveend',()=>{
   const {lng,lat}=map.getCenter();
   save('mapView',{center:[+lng.toFixed(5),+lat.toFixed(5)],zoom:+map.getZoom().toFixed(2)});
@@ -59,16 +79,19 @@ const markers=new Map<string,Marker>(),labels=new Map<string,Marker>();
 // lighter. Zoomed out, a smaller arrow with the rounded average only, so dense areas stay readable.
 // Stale stations are half transparent (solid on hover); the selected one gets a blue ring. Without a
 // direction, a dot replaces the arrow.
+// Drawn twice: a dark wide stroke underneath, then the coloured shape with a white stroke on top.
+function arrowShape(deg:number|undefined,color:string) {
+  const outline=(paint:string)=>deg===undefined?`<circle r="6" ${paint}/>`
+    :`<path transform="rotate(${deg+180})" d="M0 -14 L10 12 L0 6 L-10 12 Z" stroke-linejoin="round" ${paint}/>`;
+  return outline('fill="none" stroke="rgb(0 0 0 / 0.55)" stroke-width="5"')+outline(`fill="${color}" stroke="white" stroke-width="2.5"`);
+}
 function icon(station:Station) {
   const {stale}=freshness(station);
   const isSelected=selected?.id===station.id;
   const color=windColor(station.avg===null&&station.gust===null?null:Math.max(station.avg??0,station.gust??0));
   const deg=degrees[station.direction];
   const small=map.getZoom()<7&&!isSelected,size=small?30:46;
-  // Drawn twice: a dark wide stroke underneath, then the coloured shape with a white stroke on top.
-  const outline=(paint:string)=>deg===undefined?`<circle r="6" ${paint}/>`
-    :`<path transform="rotate(${deg+180})" d="M0 -14 L10 12 L0 6 L-10 12 Z" stroke-linejoin="round" ${paint}/>`;
-  const shape=outline('fill="none" stroke="rgb(0 0 0 / 0.55)" stroke-width="5"')+outline(`fill="${color}" stroke="white" stroke-width="2.5"`);
+  const shape=arrowShape(deg,color);
   const fade=stale&&!isSelected?'opacity-50 hover:opacity-100':'';
   const arrow=`<svg viewBox="-18 -18 36 36" width="${size}" height="${size}" class="block overflow-visible drop-shadow-[0_1px_2px_rgb(0_0_0/0.35)] transition hover:scale-110 ${fade}">${shape}</svg>`;
   const text=small?(station.avg===null?'—':String(Math.round(station.avg)))
@@ -89,6 +112,13 @@ function hasVetrTwin(station:Station) {
   const [lat,lon]=station.location;
   return stations.some(other=>other.source==='vetr'&&other.location&&siteName(other)===siteName(station)&&Math.hypot(other.location[0]-lat,(other.location[1]-lon)*Math.cos(lat*Math.PI/180))*111<5);
 }
+// Until the first data arrives, grey arrows spin at the stations' usual spots (lib/station-spots.ts).
+const placeholders=layers.wind?stationSpots.map(([lat,lon])=>{
+  const element=document.createElement('div');
+  element.className='pointer-events-none';element.setAttribute('aria-hidden','true');
+  element.innerHTML=`<svg viewBox="-18 -18 36 36" width="46" height="46" class="block animate-spin overflow-visible drop-shadow-[0_1px_2px_rgb(0_0_0/0.35)] motion-reduce:animate-none">${arrowShape(0,'#a1a1aa')}</svg>`;
+  return new Marker({element}).setLngLat([lon,lat]).addTo(map);
+}):[];
 function renderMarkers() {
   const seen=new Map<string,number>();
   for(const station of stations) {
@@ -206,14 +236,22 @@ function recent():WindSample[] {
   const all=history?.data||[],newest=Date.parse(all.at(-1)?.timestamp??'');
   return all.filter(sample=>Date.parse(sample.timestamp)>=newest-4*3600000);
 }
+// While the history loads, placeholders the size of the reading (two lines) and the graph with its legend
+// (220 px) keep the panel at its final height, with a spinning arrow as the loading sign.
+const readingPlaceholder='<span class="block py-1"><span class="block h-4 w-64 max-w-full animate-pulse rounded bg-zinc-100"></span></span>'.repeat(2);
+const chartsPlaceholder=`<div class="flex h-[220px] items-center justify-center gap-2 text-sm text-zinc-500"><svg viewBox="-18 -18 36 36" width="28" height="28" class="animate-spin overflow-visible motion-reduce:animate-none" aria-hidden="true">${arrowShape(0,'#a1a1aa')}</svg>Nalaganje…</div>`;
 function renderHistory() {
   const samples=recent();
   const latest=samples.at(-1);
   const stale=latest&&Date.now()-Date.parse(latest.timestamp)>25*60000;
   const status=$('site-history-status');
-  status.textContent=historyError||(historyLoading?'Nalaganje…':stale?'Zastarele meritve':!samples.length?'Ni meritev.':'');
+  status.textContent=historyError||(stale?'Zastarele meritve':!samples.length&&!historyLoading?'Ni meritev.':'');
   status.className=`mb-2 text-xs empty:hidden ${historyError||stale?'text-amber-700':'text-zinc-500'}`;
-  if(!samples.length){$('site-reading').innerHTML='';$('site-charts').innerHTML='';return;}
+  if(!samples.length){
+    const loading=historyLoading&&!historyError;
+    $('site-reading').innerHTML=loading?readingPlaceholder:'';$('site-charts').innerHTML=loading?chartsPlaceholder:'';
+    return;
+  }
   const found=selectedTime?samples.findIndex(sample=>sample.timestamp===selectedTime):-1;
   const index=found<0?samples.length-1:found;
   $('site-reading').innerHTML=sampleReading(samples[index]);
@@ -349,6 +387,7 @@ async function update() {
     } catch {errors.push(`${key}: vir ni dosegljiv`);}
   }));
   $('map-status').textContent=errors.join(' · ');
+  for(const placeholder of placeholders.splice(0))placeholder.remove();
   renderMarkers();
   if(selected) {
     selected=stations.find(s=>s.id===selected!.id)??selected;

@@ -4,11 +4,27 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import Layout from '../layouts/Layout.astro';
 ---
 <Layout page="Zemljevid" full>
+  <!-- Start the basemap downloads while the page script still loads: fetch the style now and open the
+       connections to the tile, font and icon servers (crossorigin, as MapLibre fetches them with CORS). -->
+  <Fragment slot="head">
+    <link rel="preload" href="https://styles.maptoolkit.org/hiking.json" as="fetch" crossorigin />
+    <link rel="preconnect" href="https://tiles.maptoolkit.org" crossorigin />
+    <link rel="preconnect" href="https://tiles.mapterhorn.com" crossorigin />
+    <link rel="preconnect" href="https://fonts.maptoolkit.org" crossorigin />
+    <link rel="preconnect" href="https://icons.maptoolkit.org" crossorigin />
+  </Fragment>
+  <!-- Header bar. On phones it hides on the first map move by the user (map.ts removes data-header);
+       on desktop it stays, with the search box and site panel below it. -->
+  <div id="map-page" data-header class="group contents">
+  <header class="absolute inset-x-0 top-0 z-[700] flex h-12 items-center justify-center border-b border-zinc-200 bg-white px-3 shadow-sm transition-all duration-300 ease-out motion-reduce:transition-none max-md:invisible max-md:-translate-y-full max-md:opacity-0 group-data-[header]:visible group-data-[header]:translate-y-0 group-data-[header]:opacity-100">
+    <p class="text-base font-semibold">Agregator veternih postaj</p>
+  </header>
   <!-- On phones the search bar is at the bottom, so the map's bottom controls move up above it. Control buttons are
-       44 px (finger size) instead of MapLibre's 29 px, with bigger icons. -->
-  <div class="absolute inset-0 z-0"><div id="map" class="h-full w-full max-md:[&_.maplibregl-ctrl-bottom-right]:mb-14 max-md:[&_.maplibregl-ctrl-bottom-left]:mb-14 [&_.maplibregl-ctrl-group_button]:size-11! [&_.maplibregl-ctrl-group]:rounded-lg! [&_.maplibregl-ctrl-zoom-in_.maplibregl-ctrl-icon]:bg-[length:36px]! [&_.maplibregl-ctrl-zoom-out_.maplibregl-ctrl-icon]:bg-[length:36px]!" role="application" aria-label="Zemljevid postaj"></div></div>
+       44 px (finger size) instead of MapLibre's 29 px, with bigger icons. The markers' z-indexes stay inside
+       their own container (isolate), so arrows never draw over the map controls. -->
+  <div class="absolute inset-0 z-0"><div id="map" class="h-full w-full [&_.maplibregl-canvas-container]:isolate max-md:[&_.maplibregl-ctrl-bottom-right]:mb-14 max-md:[&_.maplibregl-ctrl-bottom-left]:mb-14 [&_.maplibregl-ctrl-group_button]:size-11! [&_.maplibregl-ctrl-group]:rounded-lg! [&_.maplibregl-ctrl-zoom-in_.maplibregl-ctrl-icon]:bg-[length:36px]! [&_.maplibregl-ctrl-zoom-out_.maplibregl-ctrl-icon]:bg-[length:36px]!" role="application" aria-label="Zemljevid postaj"></div></div>
   <!-- Phones: at the bottom, results open upwards (column reversed). Desktop: top left, results below. -->
-  <div class="absolute inset-x-2 bottom-2 z-[600] flex flex-col-reverse gap-1 md:top-2 md:right-auto md:bottom-auto md:w-80 md:flex-col">
+  <div class="absolute inset-x-2 bottom-2 z-[600] flex flex-col-reverse gap-1 md:top-14 md:right-auto md:bottom-auto md:w-80 md:flex-col">
     <!-- Search box and a separate Napoved button beside it. -->
     <div class="flex items-center gap-2">
       <div class="flex min-w-0 flex-1 rounded-lg bg-white shadow-md">
@@ -24,7 +40,7 @@ import Layout from '../layouts/Layout.astro';
   </div>
   <!-- Site panel: bottom sheet on phones (slides up); on desktop a card at the top right, only as tall as its
        content (slides in from the right). Closed = invisible, faded and moved off; see setPanel in map.ts. -->
-  <aside id="site" tabindex="-1" aria-labelledby="site-name" class="invisible opacity-0 max-md:translate-y-full md:translate-x-8 transition-all duration-300 ease-out motion-reduce:transition-none outline-none absolute inset-x-0 bottom-0 z-[1000] max-h-[70%] overflow-y-auto border-t border-zinc-300 bg-white px-3 pb-6 shadow-lg md:top-2 md:right-2 md:bottom-auto md:left-auto md:max-h-[calc(100%-1rem)] md:w-[440px] md:rounded-lg md:border md:border-zinc-200 md:pb-4">
+  <aside id="site" tabindex="-1" aria-labelledby="site-name" class="invisible opacity-0 max-md:translate-y-full md:translate-x-8 transition-all duration-300 ease-out motion-reduce:transition-none outline-none absolute inset-x-0 bottom-0 z-[1000] max-h-[70%] overflow-y-auto border-t border-zinc-300 bg-white px-3 pb-6 shadow-lg md:top-14 md:right-2 md:bottom-auto md:left-auto md:max-h-[calc(100%-4rem)] md:w-[440px] md:rounded-lg md:border md:border-zinc-200 md:pb-4">
     <div class="sticky top-0 z-10 -mx-3 flex items-start justify-between gap-2 border-b border-zinc-200 bg-white px-3 py-2">
       <div class="min-w-0">
         <h2 id="site-name" class="text-lg leading-snug font-semibold break-words"></h2>
@@ -39,5 +55,6 @@ import Layout from '../layouts/Layout.astro';
       <div id="site-charts" tabindex="0" aria-label="Zgodovina vetra; s puščicama izberete meritev" class="touch-pan-y rounded outline-none focus-visible:ring-2 focus-visible:ring-blue-600"></div>
     </section>
   </aside>
+  </div>
   <script src="../scripts/map.ts"></script>
 </Layout>

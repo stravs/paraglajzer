@@ -106,7 +106,7 @@ test('Zemljevid: live markers, site panel with wind graph only',async({page})=>{
   page.on('pageerror',error=>errors.push(error.message));
   page.on('request',request=>{const url=new URL(request.url());if(url.pathname==='/api/source')keys.push(url.searchParams.get('key')||'');});
   await page.goto(base);
-  await expect(page.locator('header')).toHaveCount(0);
+  await expect(page.locator('header')).toHaveText('Agregator veternih postaj');
   const peter=page.locator('.maplibregl-marker[title^="Sv. Peter"]');
   await expect(peter).toBeAttached({timeout:45000});
   // Skytech covers all of Slovenia; vetr, ARSO and Luftar only Gorenjska (and Kamnik).
