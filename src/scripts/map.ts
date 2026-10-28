@@ -84,31 +84,32 @@ const markers=new Map<string,Marker>(),labels=new Map<string,Marker>();
 // A slim navigation-style arrow pointing where the wind blows (compass direction + 180°), in flying bands
 // (green up to 4 m/s, yellow to 7, orange to 10, red above): the inner arrow shows the average, the outer one the
 // gusts. A thin dark edge keeps every colour visible on light and green map areas. Its label is a white pill just below: average bold, gusts
-// lighter. Zoomed out, a smaller arrow with the rounded average only, so dense areas stay readable.
+// lighter. Arrows and labels keep one size at every zoom.
 // Stale stations are half transparent (solid on hover); the selected one gets a blue ring. Without a
 // direction, a dot replaces the arrow.
-// Drawn in three layers: a dark edge, the whole arrow in the `outer` (gusts) colour, and a smaller inner arrow in
-// the `inner` (average) colour with a black line around it. A sharp, narrow dart with a deep notch.
+// Drawn in three layers: the whole arrow in the `outer` (gusts) colour, a smaller inner arrow in the `inner`
+// (average) colour, both with the same thin dark edge. A sharp, narrow dart with a deep notch.
+const edge='rgb(0 0 0 / 0.55)',edgeWidth=1.25,innerScale=0.55;
 function arrowShape(deg:number|undefined,inner:string,outer=inner) {
   const shape=(paint:string,scale=1)=>deg===undefined?`<circle r="${6*scale}" ${paint}/>`
     :`<path transform="rotate(${deg+180}) translate(0 2) scale(${scale}) translate(0 -2)" d="M0 -16 L8.5 13 L0 5 L-8.5 13 Z" stroke-linejoin="round" ${paint}/>`;
-  return shape('fill="none" stroke="rgb(0 0 0 / 0.55)" stroke-width="5"')+shape(`fill="${outer}" stroke="${outer}" stroke-width="2.5"`)
-    +shape(`fill="${inner}" stroke="black" stroke-width="${(1.3/0.55).toFixed(2)}"`,0.55);
+  // Outer: a dark stroke under a coloured one 2 × edgeWidth narrower leaves an edgeWidth dark rim outside.
+  return shape(`fill="none" stroke="${edge}" stroke-width="${2.5+2*edgeWidth}"`)+shape(`fill="${outer}" stroke="${outer}" stroke-width="2.5"`)
+    +shape(`fill="${inner}" stroke="${edge}" stroke-width="${(edgeWidth/innerScale).toFixed(2)}"`,innerScale);
 }
 function icon(station:Station) {
   const {stale}=freshness(station);
   const isSelected=selected?.id===station.id;
   const fill=windColor(station.avg),stroke=windColor(station.gust??station.avg);
   const deg=degrees[station.direction];
-  const small=map.getZoom()<7&&!isSelected,size=small?30:46;
+  const size=46;
   const shape=arrowShape(deg,fill,stroke);
   const fade=stale&&!isSelected?'opacity-50 hover:opacity-100':'';
   const arrow=`<svg viewBox="-18 -18 36 36" width="${size}" height="${size}" class="block overflow-visible drop-shadow-[0_1px_2px_rgb(0_0_0/0.35)] transition hover:scale-110 ${fade}">${shape}</svg>`;
-  const text=small?(station.avg===null?'—':String(Math.round(station.avg)))
-    :`${speed(station.avg)}${station.gust===null?'':`<span class="font-normal text-zinc-500"> / ${speed(station.gust)}</span>`}`;
-  const label=`<span class="block rounded-full bg-white/95 font-semibold tabular-nums text-zinc-900 shadow-sm transition ${fade} ${isSelected?'ring-2 ring-blue-600':'ring-1 ring-black/10'} ${small?'px-1 text-[9px] leading-3':'px-1.5 text-[11px] leading-4'}">${text}</span>`;
+  const text=`${speed(station.avg)}${station.gust===null?'':`<span class="font-normal text-zinc-500"> / ${speed(station.gust)}</span>`}`;
+  const label=`<span class="block rounded-full bg-white/95 font-semibold tabular-nums text-zinc-900 shadow-sm transition ${fade} ${isSelected?'ring-2 ring-blue-600':'ring-1 ring-black/10'} px-1.5 text-[11px] leading-4">${text}</span>`;
   // The label hangs from the station point, 2 px below the arrow.
-  return {arrow,label,small,labelTop:size/2+2};
+  return {arrow,label,labelTop:size/2+2};
 }
 function label(station:Station) {
   return `${station.name} · veter ${speed(station.avg)} m/s · sunki ${speed(station.gust)} m/s · ${station.direction} · ${freshness(station).label}`;
@@ -150,10 +151,9 @@ function renderMarkers() {
       labelMarker=new Marker({element:labelElement,anchor:'top'}).setLngLat(at).addTo(map);
       markers.set(station.id,marker);labels.set(station.id,labelMarker);
     }
-    const {arrow,label:text,small,labelTop}=icon(station);
-    const x=small?offset*0.6:offset;
-    const element=marker.setLngLat(at).setOffset([x,0]).getElement();
-    const labelElement=labelMarker.setLngLat(at).setOffset([x,labelTop]).getElement();
+    const {arrow,label:text,labelTop}=icon(station);
+    const element=marker.setLngLat(at).setOffset([offset,0]).getElement();
+    const labelElement=labelMarker.setLngLat(at).setOffset([offset,labelTop]).getElement();
     element.innerHTML=arrow;labelElement.innerHTML=text;
     // All arrows above all labels; within each, selected above fresh above stale, so live readings are
     // not hidden by dead stations.
@@ -164,7 +164,6 @@ function renderMarkers() {
   }
 }
 
-map.on('zoomend',renderMarkers);
 
 // ---- Webcams ----
 // Small camera icons on each camera's spot, shown from zoom 9. Station arrows draw above them, so wind
