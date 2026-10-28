@@ -243,7 +243,8 @@ const chartsPlaceholder=`<div class="flex h-[220px] items-center justify-center 
 function renderHistory() {
   const samples=recent();
   const latest=samples.at(-1);
-  const stale=latest&&Date.now()-Date.parse(latest.timestamp)>25*60000;
+  // Same limit as the marker (freshness): ARSO 60 min, faster sources less.
+  const stale=selected&&latest&&freshness({...selected,observedAt:latest.timestamp}).stale;
   const status=$('site-history-status');
   status.textContent=historyError||(stale?'Zastarele meritve':!samples.length&&!historyLoading?'Ni meritev.':'');
   status.className=`mb-2 text-xs empty:hidden ${historyError||stale?'text-amber-700':'text-zinc-500'}`;

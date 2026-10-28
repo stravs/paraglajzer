@@ -81,6 +81,8 @@ export function startPolling(update:()=>Promise<unknown>,tick?:()=>void) {
 
 export function freshness(station:Station) {
   const minutes=(Date.now()-Date.parse(station.observedAt||''))/60000;
-  const stale=!Number.isFinite(minutes)||minutes>Math.max(15,station.interval*2.5)||minutes < -5;
+  // ARSO (every 30 min) is stale after 60 min; other sources after 2.5 report intervals, at least 15 min.
+  const limit=station.source==='arso'?60:Math.max(15,station.interval*2.5);
+  const stale=!Number.isFinite(minutes)||minutes>limit||minutes < -5;
   return {stale,label:!Number.isFinite(minutes)?'Čas ni znan':minutes < -5?'Napaka ure':stale?'Zastarelo':`${Math.max(0,Math.floor(minutes))} min`};
 }
