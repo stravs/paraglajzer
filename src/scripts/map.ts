@@ -296,7 +296,7 @@ async function loadRose() {
   try {
     const result=await source<WindRose>(`rose:vetr:${station.id.slice(5)}`);
     if(request!==roseRequest)return;
-    if(result.data){$('site-rose').innerHTML=windRose(result.data);$('site-rose').hidden=false;}
+    if(result.data){$('site-rose').innerHTML=windRose(result.data,station.roseImage);$('site-rose').hidden=false;}
   } catch {/* The rose is extra; the graph shows the wind. */}
 }
 function openSite(id:string) {

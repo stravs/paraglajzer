@@ -16,6 +16,11 @@ test('vetr uses the send time, not the 15-min bin end',()=>{
   assert.equal(fresh.observedAt,'2026-10-29T09:37:44.922Z');
   assert.equal(old.observedAt,'2026-10-29T08:00:00.000Z');
 });
+test('vetr rose photo is a vetr.si image, or none',()=>{
+  const entry=(img:string)=>({station:{active:true,name:'peter',wind_rose_img:img},windData:{}});
+  const [good,bad]=parseVetr(`const data = ${JSON.stringify([entry('peter_wide.jpg'),entry('../x" onerror="')])};`);
+  assert.equal(good.roseImage,'https://vetr.si/static/img/peter_wide.jpg');assert.equal(bad.roseImage,undefined);
+});
 test('Skytech parses table rows and preserves missing wind as null',()=>{
   const html=`<h1>Primorska</h1><table><tr><th>Header</th></tr><tr><td><a onclick="show('graf','abcdef')">Kovk</a></td><td>0.0 m/s</td><td>--</td><td>JZ</td><td>8&deg;C</td><td>12:34 26.10.2026</td></tr></table>`;
   const [station]=parseSkytech(html);assert.equal(station.name,'Kovk');assert.equal(station.region,'Primorska');assert.equal(station.avg,0);assert.equal(station.gust,null);assert.equal(station.observedAt,'2026-10-26T11:34:00.000Z');

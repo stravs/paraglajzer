@@ -12,6 +12,8 @@ export interface Station {
   id: string; name: string; region: string; source: 'vetr' | 'skytech' | 'arso' | 'luftar'; url: string;
   avg: number | null; gust: number | null; direction: string; observedAt: string | null;
   interval: number; note: string; location: [number, number] | null;
+  // vetr only: the aerial photo vetr.si shows behind the station's wind rose.
+  roseImage?: string;
 }
 export interface Frame { url: string; run: string; validAt: string; }
 export interface Source { url: string; interval: number; load?: () => Promise<unknown>; init?: RequestInit; parse?: (body: string, skew: number) => unknown; image?: boolean; stations?: boolean; }
@@ -54,6 +56,7 @@ export function parseVetr(html: string): Station[] {
     observedAt: vetrTime(e), interval: number(e.prefsData?.prefs?.send_data_interval_min) || 10,
     note: plain(String(e.station.message || '')),
     location: coordinates(e.station.location) ?? locations[`vetr-${e.station.name}`] ?? null,
+    roseImage: /^[\w-]+\.(?:jpg|png)$/.test(String(e.station.wind_rose_img)) ? `https://vetr.si/static/img/${e.station.wind_rose_img}` : undefined,
   }));
 }
 function coordinates(location: {lat?: unknown; lon?: unknown} | undefined): [number, number] | null {
