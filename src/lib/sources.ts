@@ -3,6 +3,7 @@ import { discoverJadralci, regionalImage, chartRegions, nearestRegion, thermalRe
 import { parseVetrHistory, chronological, speed, type WindSample } from './history.ts';
 import { locations } from './sites.ts';
 import { inGorenjska } from './gorenjska.ts';
+import { parseVetrRaw } from './vetr-raw.ts';
 import { parseVetrRose } from './rose.ts';
 
 export const ARSO = 'https://meteo.arso.gov.si';
@@ -279,6 +280,9 @@ export function sourceFor(key: string, anchor?: string): Source | null {
   if (point) return { url:point.url, interval:86400, image:true };
   const history = key.match(/^history:(vetr|skytech):([a-z0-9_-]{1,40})$/);
   const rose = key.match(/^rose:vetr:([a-z0-9_-]{1,40})$/);
+  // Raw readings for the /vetr/ comparison: 30 min, so the 10 min before the last send are there even a while after it.
+  const raw = key.match(/^raw:vetr:([a-z0-9_-]{1,40})$/);
+  if (raw) return { url:`https://vetr.si/${raw[1]}/data/wind_all.json?duration=0.5`, interval:600, parse:parseVetrRaw };
   if (rose) return { url:`https://vetr.si/${rose[1]}/data/wind_all.json?duration=1`, interval:600, parse:parseVetrRose };
   if (history?.[1] === 'vetr') return { url:`https://vetr.si/${history[2]}`, interval:600, parse:parseVetrHistory };
   if (history?.[1] === 'skytech' && /^[a-f0-9]{32}$/.test(history[2])) return { url:'https://skytech.si/skytechsys/data.php', interval:600, init:{method:'POST', body:`c=graf&l=${history[2]}`, headers:{'Content-Type':'application/x-www-form-urlencoded'}}, parse:(body, skew) => parseSkytechHistory(body, anchor ?? new Date().toISOString(), skew) };

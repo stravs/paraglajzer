@@ -38,9 +38,9 @@ export class SourceCache extends DurableObject<Env> {
     }
     let source = sourceFor(key);
     if (!source) return new Response('Unknown source', {status:404});
-    // History and wind roses are only fetched for stations in the cached listing; Skytech dates its graph from it.
+    // History, wind roses and raw readings are only fetched for stations in the cached listing; Skytech dates its graph from it.
     let force = false;
-    if (key.startsWith('history:') || key.startsWith('rose:')) {
+    if (key.startsWith('history:') || key.startsWith('rose:') || key.startsWith('raw:')) {
       const [,kind,id] = key.split(':');
       const list = await this.ctx.storage.get<Snapshot>(kind);
       const station = Array.isArray(list?.data) ? (list.data as Station[]).find(s => s.id === `${kind}-${id}`) : undefined;
@@ -53,6 +53,13 @@ export class SourceCache extends DurableObject<Env> {
       const newest = Array.isArray(graph?.data) ? (graph.data as {timestamp:string}[]).at(-1)?.timestamp : undefined;
       force = !!graph && !!list?.fetchedAt && graph.checkedAt < list.fetchedAt
         && Date.parse(station.observedAt ?? '') > Date.parse(newest ?? '');
+      // Raw readings follow the listing the same way: fetch again once the listing has a newer send (its send
+      // time is ~10 s after the last reading, hence the 1-min margin).
+      if (key.startsWith('raw:')) {
+        const raw = await this.ctx.storage.get<Snapshot>(key);
+        force = !!raw && !!list?.fetchedAt && raw.checkedAt < list.fetchedAt
+          && Date.parse(station.sentAt ?? '') - Date.parse((raw.data as {to?: string} | null)?.to ?? '') > 60000;
+      }
     }
     if (key.startsWith('frame:')) {
       const lists = await this.ctx.storage.get<Snapshot>(Object.keys(layers).map(id => `zaladin:${id}`));
@@ -136,9 +143,17 @@ export class SourceCache extends DurableObject<Env> {
     }
   }
 }
+// /vetr/ asks for a password (secret VETR_PASSWORD; any user name). Without the secret it stays locked.
+function vetrAllowed(request: Request, password: string | undefined): boolean {
+  const [scheme, encoded] = (request.headers.get('Authorization') || '').split(' ');
+  if (!password || scheme !== 'Basic' || !encoded) return false;
+  try { return atob(encoded).split(':').slice(1).join(':') === password; } catch { return false; }
+}
 export default {
   async fetch(request,env,ctx) {
     const url=new URL(request.url);
+    if ((url.pathname==='/vetr' || url.pathname.startsWith('/vetr/')) && !vetrAllowed(request, env.VETR_PASSWORD))
+      return new Response('Geslo je napačno.', {status:401, headers:{'WWW-Authenticate':'Basic realm="Paraglajzer", charset="UTF-8"', 'Cache-Control':'no-store'}});
     if (url.pathname==='/api/source') {
       const key=url.searchParams.get('key') || '';
       if (key!=='stations' && !sourceFor(key)) return new Response('Unknown source',{status:404});

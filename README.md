@@ -29,6 +29,8 @@ npx wrangler login
 npm run deploy
 ```
 
+`/vetr/` (vetr.si values vs. our own) asks for a password. Set it once with `npx wrangler secret put VETR_PASSWORD`; locally it goes in `.dev.vars` (`VETR_PASSWORD=...`).
+
 ## Key files
 
 - `src/lib/sources.ts`: sources and parsers

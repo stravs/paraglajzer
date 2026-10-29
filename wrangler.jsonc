@@ -8,7 +8,9 @@
 	"migrations": [{ "tag": "v1", "new_sqlite_classes": ["SourceCache"] }],
 	"assets": {
 		"directory": "./dist",
-		"binding": "ASSETS"
+		"binding": "ASSETS",
+		// /vetr/ is password-protected, so the Worker checks it before the static page is served.
+		"run_worker_first": ["/vetr", "/vetr/*"]
 	},
 	"observability": {
 		"enabled": true

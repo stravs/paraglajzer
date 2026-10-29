@@ -1,6 +1,6 @@
 ---
 import '../styles/global.css';
-interface Props { page:'Zemljevid' | 'Napoved'; full?:boolean; }
+interface Props { page:'Zemljevid' | 'Napoved' | 'Vetr.si'; full?:boolean; }
 const { page,full=false }=Astro.props;
 const pages={Zemljevid:'/',Napoved:'/napoved/'} as const;
 ---

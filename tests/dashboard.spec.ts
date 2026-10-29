@@ -1,4 +1,5 @@
 import { test,expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 const base=process.env.TEST_URL||'http://172.17.0.2:4324';
 test('concurrent source requests reuse the same global check',async({request})=>{
   const responses=await Promise.all(Array.from({length:8},()=>request.get(`${base}/api/source?key=vetr`)));
@@ -103,4 +104,21 @@ test('Skytech site opens with its own history',async({page})=>{
   await site.dispatchEvent('click');
   await expect(page.locator('#site-name')).toHaveText('Potoška gora');
   await expect(page.locator('#site-charts [data-chart]')).toHaveCount(1,{timeout:30000});
+});
+test('Vetr.si page: password, then vetr.si values next to our own, per station',async({browser,request})=>{
+  expect((await request.get(`${base}/vetr/`)).status()).toBe(401);
+  // The password is a secret: from the environment or the local .dev.vars, never written here.
+  let password=process.env.VETR_PASSWORD;
+  try{password??=readFileSync('.dev.vars','utf8').match(/^VETR_PASSWORD=(.*)$/m)?.[1]?.trim();}catch{/* No local secrets. */}
+  test.skip(!password,'VETR_PASSWORD not set');
+  const page=await browser.newPage({httpCredentials:{username:'pilot',password:password!}});
+  await page.setViewportSize({width:390,height:844});
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.goto(`${base}/vetr/`);
+  await expect(page.locator('#vetr-compare article').first()).toBeVisible({timeout:45000});
+  await expect(page.locator('#vetr-compare article').first()).toContainText('Sv. Peter');
+  await expect(page.locator('#vetr-compare article').first().locator('tbody tr')).toHaveCount(3);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.screenshot({path:'test-results/vetr.png',fullPage:true});
+  expect(errors).toEqual([]);
 });

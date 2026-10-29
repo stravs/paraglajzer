@@ -138,3 +138,16 @@ test('ARSO Vogel is left out (Skytech Vogel is shown) and does not linger from a
   const vogel={id:'arso-VOGEL_',name:'Vogel',region:'Gorenjska',source:'arso' as const,url:'',avg:1,gust:2,direction:'S',observedAt:'2026-10-27T09:50:00Z',interval:30,note:'',location:[46.2594,13.8396] as [number,number]};
   assert.equal(keepMissing([],[vogel],now).length,0);
 });
+test('vetr raw readings: 10 min before the last one, gust is the top reading, direction weighted by speed',async()=>{
+  const { parseVetrRaw }=await import('../src/lib/vetr-raw.ts');
+  const at=(s:number)=>new Date(Date.parse('2026-10-29T19:48:00+01:00')-s*1000).toISOString();
+  // Newest first, like vetr. The reading 11 min back is outside the window.
+  const winds=[{timestamp:at(0),value:1},{timestamp:at(5),value:3},{timestamp:at(10),value:2},{timestamp:at(15),value:6},{timestamp:at(660),value:9}];
+  const dirs=[{timestamp:at(0),value:350},{timestamp:at(5),value:30},{timestamp:at(10),value:30},{timestamp:at(15),value:30},{timestamp:at(660),value:180}];
+  const raw=parseVetrRaw(JSON.stringify({winds,dirs}));
+  assert.equal(raw.samples,4);assert.equal(raw.avg,3);assert.equal(raw.gust,6);
+  assert.equal(raw.to,'2026-10-29T18:48:00.000Z');assert.equal(raw.from,'2026-10-29T18:38:00.000Z');
+  // 11 parts at 30° against 1 part at 350°: a bit below 30°.
+  assert.ok(raw.direction!>20&&raw.direction!<30,String(raw.direction));
+  assert.throws(()=>parseVetrRaw('{}'));
+});

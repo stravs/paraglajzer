@@ -1,0 +1,26 @@
+---
+export const prerender=true;
+import Layout from '../layouts/Layout.astro';
+---
+<!-- Not in the navigation; reached at /vetr/. Shows why vetr.si's "now" can mislead, next to our own numbers. -->
+<Layout page="Vetr.si">
+  <section class="max-w-2xl text-sm leading-6" aria-labelledby="why-title">
+    <h2 id="why-title" class="mb-1 font-medium">Kako vetr.si pokaže trenutni veter</h2>
+    <ul class="list-disc space-y-1 pl-5 text-zinc-700">
+      <li>Postaja meri veter vsakih 5 sekund in meritve pošlje vsakih 10 minut.</li>
+      <li>vetr.si jih razdeli v 15-minutna okna. Okno »20:45« zajame čas od 20:37:30 do 20:52:30.</li>
+      <li>Trenutna vrednost je zadnje okno, tudi če je v njem šele nekaj sekund meritev. Pri vsakem tretjem pošiljanju ima manj kot 5 minut podatkov.</li>
+      <li>Povprečje je takrat le nenatančno, <strong>sunek pa je prenizek</strong>: v pol minute redko ujameš sunek. Pokaže lahko celo 0 / 0.</li>
+      <li>Smer je najpogostejša od 8 smeri v oknu. Ob malo meritvah je naključna, ob vetru med dvema smerema preskakuje.</li>
+    </ul>
+    <h2 class="mt-4 mb-1 font-medium">Naš izračun</h2>
+    <ul class="list-disc space-y-1 pl-5 text-zinc-700">
+      <li>Vedno zadnjih 10 minut meritev pred pošiljanjem.</li>
+      <li>Povprečje vseh meritev, sunek je najvišja meritev (5 s; standard WMO je najvišje 3-sekundno povprečje), smer je povprečna smer, kjer močnejši veter šteje več (v stopinjah).</li>
+      <li>Sunek se z vetr.si ne ujema povsem: njihove formule za sunek ne poznamo.</li>
+    </ul>
+  </section>
+  <div id="vetr-status" class="mt-6 text-xs text-zinc-500" role="status">Nalaganje…</div>
+  <div id="vetr-compare" class="mt-2 grid gap-4 sm:grid-cols-2" aria-live="polite"></div>
+  <script src="../scripts/vetr.ts"></script>
+</Layout>
