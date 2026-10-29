@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { inGorenjska } from '../src/lib/gorenjska.ts';
-import { parseVetr, parseSkytech, parseFrames, parseThermals, parseArso, parseArsoHistory, parseLuftarHistory, keepMissing, arsoStations, ljubljanaTime, clockSkew, sourceFor } from '../src/lib/sources.ts';
+import { parseVetr, parseSkytech, parseFrames, parseThermals, parseArso, parseArsoHistory, parseLuftarHistory, keepMissing, nextVetrCheck, arsoStations, ljubljanaTime, clockSkew, sourceFor } from '../src/lib/sources.ts';
 
 test('vetr exposes only normalized weather, not device credentials',()=>{
   const data=[{station:{active:true,name:'test',full_name:'Test',imsi:'secret'},prefsData:{prefs:{send_data_interval_min:'20',phoneNum:'secret'}},windData:{avg:0,max:2,dir:0,timestamp:'2026-10-26T12:00:00+01:00'}}];
@@ -15,6 +15,26 @@ test('vetr uses the send time, not the 15-min bin end',()=>{
   const [fresh,old]=parseVetr(`const data = ${JSON.stringify([entry('2026-10-29T10:45:00+01:00','2026-10-29T10:37:44.922+01:00'),entry('2026-10-29T09:00:00+01:00','2026-10-29T10:37:44.922+01:00')])};`);
   assert.equal(fresh.observedAt,'2026-10-29T09:37:44.922Z');
   assert.equal(old.observedAt,'2026-10-29T08:00:00.000Z');
+});
+test('vetr checks follow the home stations\' sends',()=>{
+  const at=(time:string)=>Date.parse(`2026-10-29T${time}+01:00`);
+  const station=(id:string,sent:string,interval=10)=>({id:`vetr-${id}`,interval,sentAt:new Date(at(sent)).toISOString()});
+  const stations=[station('peter','19:48:03'),station('stol','19:45:24'),station('gozd','19:43:33'),station('kamnik','19:41:00',20)];
+  // Just after Peter's send: next is Gozd's send at 19:53:33, checked 30 s later.
+  assert.equal(nextVetrCheck(stations,at('19:48:40')),at('19:54:03'));
+  // Gozd sent on time: then Stol (19:55:24 + 30 s).
+  assert.equal(nextVetrCheck([...stations.slice(0,2),station('gozd','19:53:30')],at('19:54:04')),at('19:55:54'));
+  // Gozd is late: retry 90 s after its expected send.
+  assert.equal(nextVetrCheck(stations,at('19:54:04')),at('19:55:03'));
+  // A missed send rolls on to the next slot.
+  assert.equal(nextVetrCheck([station('peter','19:48:03')],at('20:00:00')),at('20:08:33'));
+  // Never more than 10 min, and nothing without home stations.
+  assert.equal(nextVetrCheck([station('peter','19:48:03',30)],at('19:49:00')),at('19:59:00'));
+  assert.equal(nextVetrCheck([station('kamnik','19:41:00')],at('19:49:00')),undefined);
+});
+test('vetr keeps the send time',()=>{
+  const [peter]=parseVetr(`const data = ${JSON.stringify([{station:{active:true,name:'peter'},windData:{timestamp:'2026-10-29T19:45:00+01:00'},statusData:{timestamp:'2026-10-29T19:48:03.227000+01:00'}}])};`);
+  assert.equal(peter.sentAt,'2026-10-29T18:48:03.227Z');
 });
 test('vetr rose photo is a vetr.si image, or none',()=>{
   const entry=(img:string)=>({station:{active:true,name:'peter',wind_rose_img:img},windData:{}});

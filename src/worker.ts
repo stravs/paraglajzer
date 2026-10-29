@@ -9,6 +9,7 @@ const cacheUntil = (nextCheck: number) => ({'Cache-Control':`private, max-age=${
 // station listings come due together and a browser needs one request per interval, not one per source.
 // Never sooner than half an interval after a check, so providers are not asked much more often than set.
 const nextDue = (now: number, interval: number) => Math.ceil((now + interval * 500) / (interval * 1000)) * interval * 1000;
+const due = (source: Source, data: unknown, now: number) => source.next?.(data, now) ?? nextDue(now, source.interval);
 const view = (entry: Snapshot) => ({data:entry.data, fetchedAt:entry.fetchedAt, checkedAt:entry.checkedAt, nextCheck:entry.nextCheck, error:entry.error});
 interface Snapshot {
   data: unknown; fetchedAt: number | null; checkedAt: number; nextCheck: number;
@@ -94,7 +95,7 @@ export class SourceCache extends DurableObject<Env> {
       if (source.load) {
         const loaded=await source.load();
         const data=source.stations ? keepMissing(loaded as Station[],previous?.data) : loaded;
-        const entry:Snapshot={data,fetchedAt:now,checkedAt:now,nextCheck:nextDue(now,source.interval),error:null,failures:0};
+        const entry:Snapshot={data,fetchedAt:now,checkedAt:now,nextCheck:due(source,data,now),error:null,failures:0};
         await this.ctx.storage.put(key,entry);
         return entry;
       }
@@ -107,7 +108,7 @@ export class SourceCache extends DurableObject<Env> {
       const skew=clockSkew(response.headers.get('Date'),Date.now());
       let entry: Snapshot;
       if (response.status===304 && previous?.fetchedAt) {
-        entry={...previous, checkedAt:now, nextCheck:nextDue(now,source.interval), failures:0,error:null};
+        entry={...previous, checkedAt:now, nextCheck:due(source,previous.data,now), failures:0,error:null};
       } else {
         if (!response.ok) {
           const retry=response.headers.get('Retry-After');
@@ -118,7 +119,7 @@ export class SourceCache extends DurableObject<Env> {
         if (source.image && !contentType.startsWith('image/')) throw new Error('Invalid image response');
         const parsed=source.image ? await response.arrayBuffer() : source.parse!(await response.text(),skew);
         const data=source.stations ? keepMissing(parsed as Station[],previous?.data) : parsed;
-        entry={data,fetchedAt:now,checkedAt:now,nextCheck:nextDue(now,source.interval),error:null,failures:0,
+        entry={data,fetchedAt:now,checkedAt:now,nextCheck:due(source,data,now),error:null,failures:0,
           etag:response.headers.get('ETag') || undefined,modified:response.headers.get('Last-Modified') || undefined,contentType};
       }
       await this.ctx.storage.put(key,entry);

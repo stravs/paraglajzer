@@ -20,10 +20,18 @@ function loadStations():Promise<void> {
       if(!response.ok)throw new Error(`HTTP ${response.status}`);
       const result=await response.json() as {sources:Record<string,Snapshot<unknown>>;nextCheck:number};
       for(const key of stationKeys)if(result.sources[key])snapshots.set(key,result.sources[key]);
-      stationsDue=result.nextCheck;
+      stationsDue=result.nextCheck;wakeAt(stationsDue);
     } finally {stationsTask=null;}
   })();
   return stationsTask;
+}
+// Runs the page's update when the station listings are next due, so a new reading shows within seconds
+// instead of at the next 1-minute check. At least 10 s ahead: a browser clock running fast would otherwise
+// keep re-asking the HTTP cache.
+let wake:(()=>void)|null=null,wakeTimer=0;
+function wakeAt(time:number) {
+  clearTimeout(wakeTimer);
+  wakeTimer=window.setTimeout(()=>{if(!document.hidden)wake?.();},Math.max(time+2000-Date.now(),10000));
 }
 // fresh: ask the server now, past the snapshot's next check and the browser cache.
 export async function source<T>(key:string,fresh=false):Promise<Snapshot<T>> {
@@ -71,6 +79,7 @@ export function startPolling(update:()=>Promise<unknown>,tick?:()=>void) {
     catch {/* Each section shows its own error. */}
     finally {lastCheck=Date.now();busy=false;}
   }
+  wake=()=>void refresh();
   setInterval(()=>{if(!document.hidden){tick?.();if(Date.now()-lastCheck>=60000) void refresh();}},60000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden && Date.now()-lastCheck>=60000) void refresh();});
   void refresh();

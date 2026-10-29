@@ -5,8 +5,9 @@ test('concurrent source requests reuse the same global check',async({request})=>
   const data=await Promise.all(responses.map(response=>response.json()));
   expect(data[0].data.length).toBeGreaterThan(0);
   expect(new Set(data.map(snapshot=>snapshot.checkedAt)).size).toBe(1);
-  // Next checks fall on 10-minute clock marks, at least half an interval after the last check.
-  expect(data[0].nextCheck-data[0].checkedAt).toBeGreaterThanOrEqual(300000);
+  // vetr's next check follows the home stations' sends: at least 20 s, at most 10 min ahead.
+  expect(data[0].nextCheck-data[0].checkedAt).toBeGreaterThanOrEqual(20000);
+  expect(data[0].nextCheck-data[0].checkedAt).toBeLessThanOrEqual(600000);
   expect((await request.get(`${base}/api/source?key=thermal:LJU:extra`)).status()).toBe(404);
 });
 test('Napoved: five regional charts plus the Ljubljana sounding, region switch, no refresh button, no station fetches',async({page})=>{

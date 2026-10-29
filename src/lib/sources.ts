@@ -14,9 +14,12 @@ export interface Station {
   interval: number; note: string; location: [number, number] | null;
   // vetr only: the aerial photo vetr.si shows behind the station's wind rose.
   roseImage?: string;
+  // vetr only: when the station last sent (statusData), to time the next check.
+  sentAt?: string;
 }
 export interface Frame { url: string; run: string; validAt: string; }
-export interface Source { url: string; interval: number; load?: () => Promise<unknown>; init?: RequestInit; parse?: (body: string, skew: number) => unknown; image?: boolean; stations?: boolean; }
+// next: when to check again, from the new data; without it, on the interval's clock marks.
+export interface Source { url: string; interval: number; load?: () => Promise<unknown>; init?: RequestInit; parse?: (body: string, skew: number) => unknown; next?: (data: unknown, now: number) => number | undefined; image?: boolean; stations?: boolean; }
 // ARSO sometimes publishes a partial file mid-update (seen with 23 and 70 of ~100 stations), and a Luftar
 // file can fail on its own. So a station missing from a new listing keeps its previous reading while that
 // reading is under 2 h old; it then shows as stale instead of vanishing until the next check.
@@ -44,6 +47,25 @@ function vetrTime(e: {windData?: {timestamp?: unknown}; statusData?: {timestamp?
   const times = [e.windData?.timestamp, e.statusData?.timestamp].map(t => Date.parse(String(t ?? ''))).filter(Number.isFinite);
   return times.length ? new Date(Math.min(...times)).toISOString() : null;
 }
+const sendTime = (e: {statusData?: {timestamp?: unknown}}) => {
+  const time = Date.parse(String(e.statusData?.timestamp ?? ''));
+  return Number.isFinite(time) ? new Date(time).toISOString() : undefined;
+};
+// The home sites' vetr stations send on a steady minute that drifts less than a minute a day (seen
+// 27–29.10.2026: Sv. Peter ~:X8, Stol ~:X5, Gozd ~:X3, each within ±10 s). So the listing is checked 30 s
+// after each one's next send, plus once more at 90 s in case that send runs late. Sends are predicted from
+// the last one; a missed send rolls on to the next slot. At most 10 min apart, for the other stations.
+const homeVetr = ['vetr-peter', 'vetr-stol', 'vetr-gozd'];
+export function nextVetrCheck(stations: unknown, now: number): number | undefined {
+  if (!Array.isArray(stations)) return undefined;
+  const slots = (stations as Station[]).filter(s => homeVetr.includes(s.id)).flatMap(s => {
+    const sent = Date.parse(s.sentAt ?? ''), step = s.interval * 60000;
+    if (!Number.isFinite(sent) || !(step > 0)) return [];
+    const k = Math.max(1, Math.floor((now - sent) / step));
+    return [k, k + 1].flatMap(n => [sent + n * step + 30000, sent + n * step + 90000]);
+  }).filter(time => time >= now + 20000);
+  return slots.length ? Math.min(...slots, now + 600000) : undefined;
+}
 export function parseVetr(html: string): Station[] {
   const match = html.match(/const data\s*=\s*(\[[\s\S]*?\]);/);
   if (!match) throw new Error('Station data missing');
@@ -53,7 +75,7 @@ export function parseVetr(html: string): Station[] {
     id: `vetr-${e.station.name}`, name: String(e.station.full_name || e.station.name), region: 'Gorenjska', source: 'vetr',
     url: `https://vetr.si/${encodeURIComponent(e.station.name)}`, avg: number(e.windData?.avg), gust: number(e.windData?.max),
     direction: ['S','SV','V','JV','J','JZ','Z','SZ'][e.windData?.dir] || '—',
-    observedAt: vetrTime(e), interval: number(e.prefsData?.prefs?.send_data_interval_min) || 10,
+    observedAt: vetrTime(e), sentAt: sendTime(e), interval: number(e.prefsData?.prefs?.send_data_interval_min) || 10,
     note: plain(String(e.station.message || '')),
     location: coordinates(e.station.location) ?? locations[`vetr-${e.station.name}`] ?? null,
     roseImage: /^[\w-]+\.(?:jpg|png)$/.test(String(e.station.wind_rose_img)) ? `https://vetr.si/static/img/${e.station.wind_rose_img}` : undefined,
@@ -266,7 +288,7 @@ export function sourceFor(key: string, anchor?: string): Source | null {
   const arsoHistory = key.match(/^history:arso:([A-Z0-9_-]{1,40})$/);
   if (arsoHistory) return { url:`${ARSO}/uploads/probase/www/observ/surface/text/sl/recent/observationAms_${arsoHistory[1]}history.xml`, interval:600, parse:parseArsoHistory };
   if (key === 'arso') return { url:ARSO, interval:600, stations:true, load:async () => gorenjska(await loadArso()) };
-  if (key === 'vetr') return { url:'https://vetr.si/', interval:600, stations:true, parse:body => gorenjska(parseVetr(body)) };
+  if (key === 'vetr') return { url:'https://vetr.si/', interval:600, stations:true, parse:body => gorenjska(parseVetr(body)), next:nextVetrCheck };
   if (key === 'skytech') return { url:'https://skytech.si/skytechsys/data.php', interval:600, init:{method:'POST', body:'c=tabela', headers:{'Content-Type':'application/x-www-form-urlencoded'}}, stations:true, parse:parseSkytech };
   if (key === 'aviation') return { url:`${ARSO}/uploads/probase/www/aviation/fproduct/text/sl/aviation.txt`, interval:600, parse:body => body.replace(/\^/g,'Č').replace(/~/g,'č').replace(/\[/g,'Š').replace(/\{/g,'š').replace(/@/g,'Ž').replace(/`/g,'ž') };
   if (key === 'sounding') return { url:`${ARSO}/uploads/probase/www/aviation/observ/upper/graphic/sigps_ljubljana-bezigrad.png`, interval:1800, image:true };
