@@ -204,13 +204,15 @@ export function parseLuftarHistory(body: string): WindSample[] {
       direction: dir === null || dir < 0 || dir > 360 ? null : dir % 360 }];
   }));
 }
-// The listing is the newest reading of each station; a station that fails is left out for this check.
+// The listing is the newest reading of each station that has wind (Kriška gora sometimes sends rows with
+// only a time, seen 2026-10-29); a station that fails is left out for this check.
 async function loadLuftar(): Promise<Station[]> {
   const stations = await Promise.all((Object.keys(luftarStations) as (keyof typeof luftarStations)[]).map(async (id): Promise<Station | null> => {
     try {
       const response = await fetch(luftarUrl(id), { headers: { 'User-Agent': 'Paraglajzer/0.1 (shared paragliding weather cache)' }, signal: AbortSignal.timeout(8000) });
       if (!response.ok) return null;
-      const latest = parseLuftarHistory(await response.text()).at(-1)!;
+      const samples = parseLuftarHistory(await response.text());
+      const latest = samples.findLast(sample => sample.avg !== null) ?? samples.at(-1)!;
       const site = luftarStations[id];
       return { id: `luftar-${id}`, name: site.name, region: 'Gorenjska', source: 'luftar', url: 'https://www.luftar.si/', avg: latest.avg, gust: latest.gust,
         direction: latest.direction === null ? '—' : compass8(latest.direction), observedAt: latest.timestamp, interval: 10, note: '', location: [...site.location] };

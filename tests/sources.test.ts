@@ -77,6 +77,12 @@ test('Luftar history uses Ljubljana wall-clock times and exact degrees',()=>{
   assert.ok(sourceFor('history:luftar:kriska')?.url.endsWith('wsDataKriskaHiCharts.json'));
   assert.equal(sourceFor('history:luftar:other'),null);
 });
+test('Luftar listing skips newest rows without wind',async t=>{
+  const body=JSON.stringify([{timestamp:'2026-10-29T10:22:07',wind_speed:1.8,wind_speed_max:2,wind_direction:356},{timestamp:'2026-10-29T10:42:07',wind_speed:null,wind_speed_max:null,wind_direction:null}]);
+  t.mock.method(globalThis,'fetch',async()=>new Response(body));
+  const kriska=(await sourceFor('luftar')!.load!() as {id:string;avg:number|null;observedAt:string}[]).find(s=>s.id==='luftar-kriska')!;
+  assert.equal(kriska.avg,1.8);assert.equal(kriska.observedAt,'2026-10-29T09:22:00.000Z');
+});
 test('Skytech leaves out the offline Kriška gora and Kranjska gora (launch) stations',()=>{
   const row=(id:string,name:string)=>`<tr><td><a onclick="show('graf','${id}')">${name}</a></td><td>1.0 m/s</td><td>2.0 m/s</td><td>J</td><td>8&deg;C</td><td>12:34 26.10.2026</td></tr>`;
   const stations=parseSkytech(`<h1>Gorenjska</h1><table>${row('ef075856fd59824786203959f9c8c45c','Kriška gora na servisu')}${row('663c0360a78bbf835b350de0b7c2231c','Kranjska gora')}${row('660959a9154c11d3799f9477438e850c','Kranjska Gora landing')}${row('cd48780dbbc7a7c9c4efb5e7466754b0','Gozd')}</table>`);
