@@ -245,6 +245,8 @@ function openSite(id:string) {
   }
   void loadHistory();void loadRose();
   showThanks(station.source);
+  const slug=slugs().get(id);
+  if(slug)window.history.replaceState(null,'',`#${slug}`);
   // Focus the panel itself (no highlighted button); Tab then reaches the close button.
   $('site').focus({preventScroll:true});
 }
@@ -260,6 +262,7 @@ function closeSite(returnFocus=false) {
   const id=selected?.id;
   selected=null;++historyRequest;
   setPanel(false);renderMarkers();showThanks(null);
+  window.history.replaceState(null,'',location.pathname+location.search);
   if(id&&returnFocus)markers.get(id)?.getElement()?.focus({preventScroll:true});
 }
 // detail is 0 when the button is activated from the keyboard.
@@ -337,6 +340,41 @@ results.addEventListener('click',event=>{
   if(station)pick(station);
 });
 
+// ---- Links ----
+// A site's link is its name without diacritics and without vetr's detail after " - " (/#sv-peter, /#gozd,
+// /#potoska-gora). If two stations on the map share a name, the later one by source gets its source added
+// (Stol in Kobarid: #stol-skytech).
+const sourceOrder=['vetr','skytech','arso','luftar'];
+const slugOf=(name:string)=>fold(name).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+function slugs():Map<string,string> {
+  const taken=new Set<string>(),result=new Map<string,string>();
+  const shown=stations.filter(s=>markers.has(s.id)).sort((a,b)=>sourceOrder.indexOf(a.source)-sourceOrder.indexOf(b.source)||a.id.localeCompare(b.id));
+  for(const station of shown) {
+    let slug=slugOf(station.name.split(' - ')[0]);
+    if(taken.has(slug))slug=`${slug}-${station.source}`;
+    taken.add(slug);result.set(station.id,slug);
+  }
+  return result;
+}
+// Opens the site named in the address, once the stations are known.
+function openLinked():boolean {
+  const slug=decodeURIComponent(location.hash.slice(1));
+  if(!slug)return true;
+  const id=[...slugs()].find(([,s])=>s===slug)?.[0];
+  const station=stations.find(s=>s.id===id);
+  if(station)pick(station);
+  return !!station;
+}
+let linkPending=true;
+addEventListener('hashchange',()=>void openLinked());
+$('site-share').addEventListener('click',async()=>{
+  const url=location.href,title=selected?.name??'Paraglajzer';
+  try {
+    if(navigator.share&&matchMedia('(pointer: coarse)').matches)await navigator.share({title,url});
+    else {await navigator.clipboard.writeText(url);$('site-share-status').textContent='Povezava kopirana';$('site-share').title='Kopirano';setTimeout(()=>{$('site-share').title='Deli povezavo';$('site-share-status').textContent='';},2000);}
+  } catch {/* Share menu closed, or no clipboard access. */}
+});
+
 async function update() {
   const errors:string[]=[];
   await Promise.all(['vetr','skytech','arso','luftar'].map(async key=>{
@@ -349,6 +387,8 @@ async function update() {
   $('map-status').textContent=errors.join(' · ');
   for(const placeholder of placeholders.splice(0))placeholder.remove();
   renderMarkers();
+  // A shared link opens its site after the first load (once all four listings are in).
+  if(linkPending&&stations.length){linkPending=false;openLinked();}
   if(selected) {
     selected=stations.find(s=>s.id===selected!.id)??selected;
     renderHeader();

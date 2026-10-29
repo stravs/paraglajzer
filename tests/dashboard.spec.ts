@@ -108,7 +108,7 @@ test('Skytech site opens with its own history',async({page})=>{
 test('Vetr.si page: password, then vetr.si values next to our own, per station',async({browser,request})=>{
   expect((await request.get(`${base}/vetr/`)).status()).toBe(401);
   // The password is a secret: from the environment or the local .dev.vars, never written here.
-  let password=process.env.VETR_PASSWORD;
+  let password:string|undefined=process.env.VETR_PASSWORD;
   try{password??=readFileSync('.dev.vars','utf8').match(/^VETR_PASSWORD=(.*)$/m)?.[1]?.trim();}catch{/* No local secrets. */}
   test.skip(!password,'VETR_PASSWORD not set');
   const page=await browser.newPage({httpCredentials:{username:'pilot',password:password!}});
@@ -121,4 +121,20 @@ test('Vetr.si page: password, then vetr.si values next to our own, per station',
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:'test-results/vetr.png',fullPage:true});
   expect(errors).toEqual([]);
+});
+test('Zemljevid: a link with the site name opens it; the address follows the open site',async({page,context})=>{
+  await context.grantPermissions(['clipboard-read','clipboard-write']);
+  await page.goto(`${base}/#sv-peter`);
+  await expect(page.locator('#site-name')).toHaveText('Sv. Peter',{timeout:45000});
+  await expect(page).toHaveURL(`${base}/#sv-peter`);
+  // Desktop: the share button copies the link (browsers allow it on HTTPS or localhost only).
+  if(await page.evaluate(()=>isSecureContext)) {
+    await page.locator('#site-share').click();
+    expect(await page.evaluate(()=>navigator.clipboard.readText())).toBe(`${base}/#sv-peter`);
+  }
+  // Names without diacritics: Potoška gora is #potoska-gora.
+  await page.goto(`${base}/#potoska-gora`);
+  await expect(page.locator('#site-name')).toHaveText('Potoška gora',{timeout:45000});
+  await page.locator('#site-close').click();
+  await expect(page).toHaveURL(`${base}/`);
 });
