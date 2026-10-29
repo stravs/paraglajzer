@@ -55,7 +55,7 @@ export async function imageSource(key:string):Promise<CachedImage> {
   if(previous && Date.now()<previous.expires) return previous;
   const response=await fetch(`/api/source?key=${encodeURIComponent(key)}`,{signal:AbortSignal.timeout(30000)});
   if(!response.ok || !response.headers.get('Content-Type')?.startsWith('image/')) throw new Error('Slika ni na voljo');
-  const interval=key==='radar'?300:key==='sounding'?1800:86400;
+  const interval=key==='sounding'?1800:86400;
   const result={url:URL.createObjectURL(await response.blob()),stale:response.headers.get('X-Source-Stale')==='true',fetchedAt:Number(response.headers.get('X-Fetched-At')),expires:Date.now()+interval*1000};
   // Keep old URLs alive until navigation, in case they are still displayed.
   objectUrls.push(result.url);images.set(key,result);return result;
@@ -64,14 +64,13 @@ const objectUrls:string[]=[];
 window.addEventListener('pagehide',event=>{if(!event.persisted)objectUrls.forEach(url=>URL.revokeObjectURL(url));});
 export function startPolling(update:()=>Promise<unknown>,tick?:()=>void) {
   let busy=false,lastCheck=0;
-  // The map page has no refresh button or status.
-  const button=document.getElementById('refresh') as HTMLButtonElement|null,status=document.getElementById('refresh-status');
+  // The map and Napoved pages have no refresh button.
+  const button=document.getElementById('refresh') as HTMLButtonElement|null;
   async function refresh() {
     if(busy) return;
     busy=true;if(button)button.disabled=true;
-    if(status)status.textContent='Nalaganje…';
-    try {await update();if(status)status.textContent=`Preverjeno ${date(Date.now())}`;}
-    catch {if(status)status.textContent='Napaka pri osveževanju';}
+    try {await update();}
+    catch {/* Each section shows its own error. */}
     finally {lastCheck=Date.now();busy=false;if(button)button.disabled=false;}
   }
   button?.addEventListener('click',()=>void refresh());

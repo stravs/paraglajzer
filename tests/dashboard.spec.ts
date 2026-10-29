@@ -60,7 +60,7 @@ test('Napoved: five regional charts plus the Ljubljana sounding, region switch, 
   expect(errors).toEqual([]);
   // Text forecast and radar are shown without opening anything.
   await expect(page.locator('#aviation-text')).not.toHaveText('Nalaganje…',{timeout:30000});
-  await expect(page.locator('#radar-image img')).toHaveCount(1,{timeout:30000});
+  await expect(page.locator('#radar-image img')).toHaveCount(2,{timeout:30000});
   await page.getByRole('link',{name:'Zemljevid',exact:true}).click();await expect(page).toHaveURL(/\/$/);
 });
 test('Sv. Peter expands inline, shows one combined wind chart, and reuses cached history',async({page})=>{
@@ -154,31 +154,6 @@ test('Zemljevid: search finds a site without diacritics and opens it',async({pag
   await page.locator('#site-search').fill('xyz nonexistent');
   await expect(page.locator('#search-results')).toContainText('Ni zadetkov.');
   await page.getByRole('link',{name:'Napoved',exact:true}).click();await expect(page).toHaveURL(/\/napoved\//);
-});
-test('Zemljevid: layers (wind on, webcams off by default); webcam images load only when opened',async({page})=>{
-  // Phone view: it starts zoomed in on the home sites, where camera icons show (from zoom 9).
-  await page.setViewportSize({width:390,height:844});
-  const images:string[]=[];
-  page.on('request',request=>{if(request.resourceType()==='image'&&/Dobrca/.test(request.url()))images.push(request.url());});
-  await page.goto(base);
-  const camera=page.locator('[aria-label="Spletna kamera: Koča na Dobrči"]');
-  // Webcams are off by default; wind is on.
-  await expect(page.locator('[data-layer="wind"]')).toHaveAttribute('aria-pressed','true');
-  await expect(page.locator('[data-layer="cameras"]')).toHaveAttribute('aria-pressed','false');
-  await expect(page.locator('.maplibregl-marker[title^="Sv. Peter"]')).toBeVisible({timeout:45000});
-  await expect(camera).toBeHidden();
-  await page.locator('[data-layer="cameras"]').click();
-  await expect(camera).toBeVisible();
-  expect(images).toHaveLength(0);
-  await camera.click();
-  await expect(page.locator('.maplibregl-popup img')).toHaveCount(2);
-  expect(images.length).toBeGreaterThan(0);
-  // Turning wind off hides the station arrows; the choice survives a reload.
-  await page.locator('[data-layer="wind"]').click();
-  await expect(page.locator('.maplibregl-marker[title^="Sv. Peter"]')).toBeHidden();
-  await page.reload();
-  await expect(page.locator('[data-layer="wind"]')).toHaveAttribute('aria-pressed','false');
-  await expect(page.locator('[aria-label="Spletna kamera: Koča na Dobrči"]')).toBeVisible({timeout:45000});
 });
 test('Skytech site opens with its own history',async({page})=>{
   await page.goto(base);

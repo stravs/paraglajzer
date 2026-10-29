@@ -211,23 +211,25 @@ $('forecast-viewer').addEventListener('touchend',event=>{
   if(Math.abs(dx)>40&&Math.abs(dx)>Math.abs(dy)){event.preventDefault();step(dx<0?1:-1);}
 });
 
-// Text forecast and radar are always shown, refreshed with the page's normal checks.
-async function loadDetail(kind:'aviation'|'radar') {
-  const target=$(kind==='aviation'?'aviation-text':`${kind}-image`);
+// Text forecast, refreshed with the page's normal checks.
+async function loadAviation() {
+  const target=$('aviation-text');
   try {
-    if(kind==='aviation') {
-      const result=await source<string>('aviation');
-      target.textContent=(result.error?'Napaka vira · shranjena napoved\n\n':'')+(result.data||'Ni podatkov.');target.classList.remove('text-zinc-500');
-    } else {
-      const result=await imageSource(kind);
-      const image=new Image();image.src=result.url;image.alt='Radar padavin';
-      image.className='h-auto w-full max-w-[740px]';
-      target.replaceChildren(image);
-      if(result.stale){const warning=document.createElement('p');warning.textContent='Shranjena slika · napaka vira';target.appendChild(warning);}
-    }
+    const result=await source<string>('aviation');
+    target.textContent=(result.error?'Napaka vira · shranjena napoved\n\n':'')+(result.data||'Ni podatkov.');target.classList.remove('text-zinc-500');
   } catch {target.textContent='Vir ni dosegljiv.';}
 }
+// Radar images are plain <img> tags in the page. Every 5 minutes they get a new ?t= stamp to fetch a fresh copy.
+let radarStamp=Math.floor(Date.now()/300000);
+function refreshRadar() {
+  const stamp=Math.floor(Date.now()/300000);
+  if(stamp===radarStamp)return;
+  radarStamp=stamp;
+  for(const image of document.querySelectorAll<HTMLImageElement>('#radar-image img')) {
+    const url=new URL(image.src);url.searchParams.set('t',String(stamp));image.src=url.href;
+  }
+}
 startPolling(()=>Promise.allSettled([
-  loadRegionalCharts(),loadSounding(),loadThermals(),loadFrames(),
-  ...(['aviation','radar'] as const).map(kind=>loadDetail(kind)),
+  loadRegionalCharts(),loadSounding(),loadThermals(),loadFrames(),refreshRadar(),
+  loadAviation(),
 ]));

@@ -1,11 +1,10 @@
-import { Map as MapLibre,Marker,NavigationControl,Popup,setWorkerUrl,type StyleSpecification } from 'maplibre-gl';
+import { Map as MapLibre,Marker,NavigationControl,setWorkerUrl,type StyleSpecification } from 'maplibre-gl';
 import { LogoControl } from '@maptoolkit/maplibre-logo-control';
 import '@maptoolkit/maplibre-logo-control/style.css';
 // MapLibre finds its worker next to its own module, which Vite moves; point it at the real file.
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import type { Station } from '../lib/sources';
 import type { WindSample } from '../lib/history';
-import { webcams,type Webcam } from '../lib/webcams';
 import { stationSpots } from '../lib/station-spots';
 import { $,escape,date,freshness,read,save,source,sourceLabel,startPolling,type Snapshot } from './weather';
 import { windCharts,sampleLabel,sampleReading,windColor } from './wind-charts';
@@ -74,7 +73,6 @@ map.addControl(new NavigationControl({showCompass:false}),'bottom-right');
 // Compass labels used by both vetr and Skytech tables; the wind comes from this direction.
 const degrees:Record<string,number>={S:0,SV:45,V:90,JV:135,J:180,JZ:225,Z:270,SZ:315};
 const speed=(n:number|null)=>n===null?'—':n.toFixed(1);
-const layers=read('layers',{wind:true,cameras:false});
 let stations:Station[]=[];
 let selected:Station|null=null;
 // Each station has two markers: the arrow (focusable, carries the title) and its number label. They are
@@ -124,12 +122,12 @@ function hasVetrTwin(station:Station) {
   return stations.some(other=>other.source==='vetr'&&other.location&&siteName(other)===siteName(station)&&Math.hypot(other.location[0]-lat,(other.location[1]-lon)*Math.cos(lat*Math.PI/180))*111<5);
 }
 // Until the first data arrives, grey arrows spin at the stations' usual spots (lib/station-spots.ts).
-const placeholders=layers.wind?stationSpots.map(([lat,lon])=>{
+const placeholders=stationSpots.map(([lat,lon])=>{
   const element=document.createElement('div');
   element.className='pointer-events-none';element.setAttribute('aria-hidden','true');
   element.innerHTML=`<svg viewBox="-18 -18 36 36" width="46" height="46" class="block animate-spin overflow-visible drop-shadow-[0_1px_2px_rgb(0_0_0/0.35)] motion-reduce:animate-none">${arrowShape(0,'#a1a1aa')}</svg>`;
   return new Marker({element}).setLngLat([lon,lat]).addTo(map);
-}):[];
+});
 function renderMarkers() {
   const seen=new Map<string,number>();
   for(const station of stations) {
@@ -160,76 +158,9 @@ function renderMarkers() {
     const rank=selected?.id===station.id?2:freshness(station).stale?0:1;
     element.style.zIndex=String(4+rank);labelElement.style.zIndex=String(1+rank);
     element.setAttribute('title',label(station));element.setAttribute('aria-label',label(station));
-    element.hidden=labelElement.hidden=!layers.wind;
   }
 }
 
-
-// ---- Webcams ----
-// Small camera icons on each camera's spot, shown from zoom 9. Station arrows draw above them, so wind
-// readings are never hidden where a camera shares a station's spot. Tapping one opens a popup; only then are its images loaded, straight from the operator.
-const cameraSvg='<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="12.5" r="3.5"/></svg>';
-// The popup always opens above the icon; the map moves the camera into the lower part of the view
-// first, so there is room above it and below the search bar.
-const popup=new Popup({maxWidth:'320px',anchor:'bottom',offset:14});
-function openWebcam(cam:Webcam) {
-  // Bust browser caches once a minute so a reopened popup shows a fresh image.
-  const minute=Math.floor(Date.now()/60000);
-  const body=document.createElement('div');
-  body.className='w-72 max-w-full text-xs';
-  body.innerHTML=`<p class="mb-1 text-sm font-semibold">${escape(cam.name)}</p><div data-images class="grid max-h-[55dvh] gap-2 overflow-y-auto text-zinc-500"></div>
-    <a href="${escape(cam.page)}" target="_blank" rel="noopener noreferrer" class="mt-2 inline-block text-zinc-500 underline">Vir ↗</a>`;
-  map.easeTo({center:[cam.location[1],cam.location[0]],offset:[0,map.getContainer().clientHeight*0.3]});
-  popup.setLngLat([cam.location[1],cam.location[0]]).setDOMContent(body).addTo(map);
-  body.querySelector('[data-images]')!.innerHTML=cam.images.map(image=>{
-    const url=`${image.url}${image.url.includes('?')?'&':'?'}t=${minute}`;
-    return `<figure><a href="${escape(url)}" target="_blank" rel="noopener noreferrer"><img src="${escape(url)}" alt="${escape(`${cam.name} · ${image.title}`)}" class="aspect-video w-full rounded bg-zinc-100 object-cover"></a>
-      <figcaption class="mt-0.5">${escape(image.title)}</figcaption></figure>`;
-  }).join('');
-}
-const cameraMarkers=webcams.map(cam=>{
-  const element=document.createElement('div');
-  element.className='grid size-6 cursor-pointer place-items-center rounded-full bg-white/95 text-zinc-700 shadow ring-1 ring-black/10 hover:text-black';
-  element.innerHTML=cameraSvg;element.tabIndex=0;element.setAttribute('role','button');
-  element.setAttribute('aria-label',`Spletna kamera: ${cam.name}`);element.title=`Kamera · ${cam.name}`;
-  element.addEventListener('click',event=>{event.stopPropagation();openWebcam(cam);});
-  element.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openWebcam(cam);}});
-  return new Marker({element}).setLngLat([cam.location[1],cam.location[0]]).addTo(map);
-});
-function showCameras() {
-  for(const marker of cameraMarkers)marker.getElement().hidden=!layers.cameras||map.getZoom()<9;
-  if(!layers.cameras)popup.remove();
-}
-map.on('zoomend',showCameras);showCameras();
-
-// ---- Layers ----
-// Wind stations and webcams can each be switched off; wind is on and webcams off by default.
-// The choice is remembered per browser.
-const layerButtons={
-  wind:{title:'Veter',svg:'<path d="M12 3 L18 19 L12 15 L6 19 Z"/>'},
-  cameras:{title:'Spletne kamere',svg:'<path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L17 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="12.5" r="3.5"/>'},
-} as const;
-function setLayer(layer:keyof typeof layerButtons,on:boolean) {
-  layers[layer]=on;save('layers',layers);
-  if(layer==='wind'){renderMarkers();if(!on&&selected)closeSite();}else showCameras();
-  const button=document.querySelector(`[data-layer="${layer}"]`);
-  button?.setAttribute('aria-pressed',String(on));
-  button?.classList.toggle('text-blue-600',on);button?.classList.toggle('text-zinc-400',!on);
-}
-map.addControl({
-  onAdd() {
-    const group=document.createElement('div');
-    group.className='maplibregl-ctrl maplibregl-ctrl-group';
-    group.innerHTML=(Object.keys(layerButtons) as (keyof typeof layerButtons)[]).map(layer=>`<button type="button" data-layer="${layer}" aria-pressed="${layers[layer]}" title="${layerButtons[layer].title}" aria-label="${layerButtons[layer].title}" class="${layers[layer]?'text-blue-600':'text-zinc-400'}">
-      <svg viewBox="0 0 24 24" width="24" height="24" class="mx-auto" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${layerButtons[layer].svg}</svg></button>`).join('');
-    group.addEventListener('click',event=>{
-      const layer=(event.target as Element).closest<HTMLElement>('[data-layer]')?.dataset.layer as keyof typeof layerButtons|undefined;
-      if(layer)setLayer(layer,!layers[layer]);
-    });
-    return group;
-  },
-  onRemove() {},
-},'bottom-right');
 
 // ---- Site panel ----
 let history:Snapshot<WindSample[]>|null=null;
@@ -333,9 +264,9 @@ function closeSite(returnFocus=false) {
 }
 // detail is 0 when the button is activated from the keyboard.
 $('site-close').addEventListener('click',event=>closeSite(event.detail===0));
-// Clicking or tapping empty map closes the panel (not a station, a camera or its popup; drags are not clicks).
+// Clicking or tapping empty map closes the panel (not a station; drags are not clicks).
 map.on('click',event=>{
-  if(selected&&!(event.originalEvent.target as Element).closest('.maplibregl-marker,.maplibregl-popup'))closeSite();
+  if(selected&&!(event.originalEvent.target as Element).closest('.maplibregl-marker'))closeSite();
 });
 addEventListener('keydown',event=>{if(event.key==='Escape'&&selected)closeSite(true);});
 // Reading under the pointer: the sample whose x position on the graph is nearest.
@@ -387,7 +318,6 @@ function renderResults() {
 }
 function pick(station:Station) {
   search.value='';search.blur();
-  if(!layers.wind)setLayer('wind',true);
   map.jumpTo({center:[station.location![1],station.location![0]],zoom:Math.max(map.getZoom(),11)});
   openSite(station.id);
 }

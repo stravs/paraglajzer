@@ -1,6 +1,6 @@
 # Paraglajzer
 
-Slovenian paragliding weather tool. `/` is a map of stations with live wind; tapping a site opens its wind graph. `/napoved/` has forecasts and images, `/postaje/` a compact station table in m/s. Astro + Tailwind v4 + Cloudflare Workers. No React, accounts, or database service. The only client-to-provider requests are map tiles (Maptoolkit) and, when a webcam popup is opened, that camera's images.
+Slovenian paragliding weather tool. `/` is a map of stations with live wind; tapping a site opens its wind graph. `/napoved/` has forecasts and images, `/postaje/` a compact station table in m/s. Astro + Tailwind v4 + Cloudflare Workers. No React, accounts, or database service. The only client-to-provider requests are map tiles (Maptoolkit), vetr.si's wind rose photos and ARSO's radar images.
 
 ## Run
 
@@ -50,7 +50,6 @@ The SQLite-backed `SourceCache` Durable Object is declared and migrated by `wran
 | ARSO sounding | 30 minutes | Open sounding |
 | ARSO Jadralci model-run discovery | 30 minutes | Regional charts visible |
 | ARSO dated regional charts | 24 hours | Selected region only |
-| ARSO radar | 5 minutes | Load radar |
 | ARSO dated model image | 24 hours | Selected frame only |
 
 Checks fall on clock boundaries of their interval (10-minute sources at :00, :10, :20 …) and are never sooner than half an interval after the last one. The four station listings are served together (`/api/source?key=stations`), and every response may be cached by the browser until the server's next check, so an open map makes about one request per 10 minutes (plus one per 10 minutes for an open site's history).
@@ -77,9 +76,7 @@ All upstream URLs are allowlisted, with canonical cache keys. Model images must 
 - Five Zaladin layers (precipitation, wind at 1500 m, 750 m and 10 m, temperature), newest model run, big prev/next arrows on the image (swipe on touch screens) plus a slider, times as weekday and time ("Torek 19:00"); the current image stays until the next has loaded, and only the shown frame is downloaded.
 - All five Jadralci regional images for all 12 regions: temperature gradient, relative humidity/clouds, wind, and two forecast soundings.
 - Model-run discovery follows ARSO's 04/16 UTC switch, with bounded fallback checks for missing runs; dates are never hardcoded. Only selected-region images are fetched, starting when the section becomes visible.
-- ARSO aviation text, Ljubljana sounding, and rain radar on demand.
-- Two map layers, toggled with buttons above the zoom control: wind stations (on by default) and webcams (off by default). The choice is remembered per browser; picking a station in search turns wind back on.
-- Small camera icons (from zoom 9) for public webcams around the home sites, listed in `src/lib/webcams.ts`: Klagenfurter Hütte, Bodental, Zelenica (hut + ARSO), Ljubelj, Dobrča, Kriška gora, Sebenje, Tržič and A2 Vrba. Tapping one opens a popup with its current images, loaded from the operator only then. Station arrows draw above camera icons. Ask the operators before a public launch.
+- ARSO aviation text, Ljubljana sounding, and rain radar (latest image, then the animated GIF; both loaded straight from ARSO's static URLs, not through our server).
 - The map reopens where you left it (centre and zoom saved in the browser). Without a saved position, desktop opens on all of Slovenia (all stations); phones open on the home sites (Sv. Peter, Stol, Gozd) with the search bar and Napoved button at the bottom, results opening upwards.
 - The map page has no header: a floating site search (ignores diacritics, shows current wind; Enter opens the site) with a Napoved link (Postaje is reached from the other pages' top bar). Other pages keep the top bar. Plain tables and images, inline expandable ARSO details.
 - Each page fetches only its own data: no station requests on Napoved or forecast requests on Postaje.
