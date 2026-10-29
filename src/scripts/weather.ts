@@ -6,7 +6,7 @@ export const escape=(value:unknown)=>String(value??'').replace(/[&<>"']/g,c=>({'
 export const date=(value:string|number)=>Number.isFinite(new Date(value).getTime()) ? new Intl.DateTimeFormat('sl-SI',{timeZone:'Europe/Ljubljana',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(value)) : 'Čas ni znan';
 export function read<T>(key:string,fallback:T):T { try{return JSON.parse(localStorage.getItem(key)||'null')??fallback;}catch{return fallback;} }
 export function save(key:string,value:unknown) {try{localStorage.setItem(key,JSON.stringify(value));}catch{/* Preferences remain in memory. */}}
-export const snapshots=new Map<string,Snapshot<unknown>>();
+const snapshots=new Map<string,Snapshot<unknown>>();
 const pending=new Map<string,Promise<Snapshot<unknown>>>();
 // The four station listings arrive together from key 'stations' (one request instead of four);
 // each listing is reused until the earliest of their next server checks.
@@ -64,16 +64,13 @@ const objectUrls:string[]=[];
 window.addEventListener('pagehide',event=>{if(!event.persisted)objectUrls.forEach(url=>URL.revokeObjectURL(url));});
 export function startPolling(update:()=>Promise<unknown>,tick?:()=>void) {
   let busy=false,lastCheck=0;
-  // The map and Napoved pages have no refresh button.
-  const button=document.getElementById('refresh') as HTMLButtonElement|null;
   async function refresh() {
     if(busy) return;
-    busy=true;if(button)button.disabled=true;
+    busy=true;
     try {await update();}
     catch {/* Each section shows its own error. */}
-    finally {lastCheck=Date.now();busy=false;if(button)button.disabled=false;}
+    finally {lastCheck=Date.now();busy=false;}
   }
-  button?.addEventListener('click',()=>void refresh());
   setInterval(()=>{if(!document.hidden){tick?.();if(Date.now()-lastCheck>=60000) void refresh();}},60000);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden && Date.now()-lastCheck>=60000) void refresh();});
   void refresh();

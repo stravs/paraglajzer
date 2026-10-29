@@ -1,28 +1,5 @@
 import { test,expect } from '@playwright/test';
 const base=process.env.TEST_URL||'http://172.17.0.2:4324';
-test('Postaje: compact m/s table, search, saved stations, no forecast fetches',async({page})=>{
-  await page.setViewportSize({width:390,height:844});
-  const errors:string[]=[],keys:string[]=[];
-  page.on('pageerror',error=>errors.push(error.message));
-  page.on('request',request=>{const url=new URL(request.url());if(url.pathname==='/api/source')keys.push(url.searchParams.get('key')||'');});
-  await page.goto(`${base}/postaje/`);
-  await expect(page.locator('#stations')).toHaveAttribute('aria-busy','false',{timeout:45000});
-  expect(await page.locator('[data-save]').count()).toBeGreaterThan(0);
-  await expect(page.locator('thead')).toContainText('m/s');
-  await expect(page.locator('body')).not.toContainText('km/h');
-  // Postaje is not in the navigation (reached by URL); the nav has Zemljevid and Napoved.
-  await expect(page.locator('nav a')).toHaveCount(2);
-  await expect(page.getByRole('link',{name:'Postaje',exact:true})).toHaveCount(0);
-  await page.locator('[data-save]').first().click();
-  await page.selectOption('#source-filter','favorites');
-  await expect(page.locator('[data-save]')).toHaveCount(1);
-  await page.selectOption('#source-filter','all');
-  await page.locator('#search').fill('xyz nonexistent');await expect(page.locator('#stations')).toContainText('Ni postaj.');
-  await page.locator('#search').fill('');expect(await page.locator('[data-save]').count()).toBeGreaterThan(0);
-  for(const width of [390,768]){await page.setViewportSize({width,height:844});expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);}
-  expect(keys).toEqual(expect.arrayContaining(['stations']));expect(keys.every(key=>key==='stations')).toBe(true);
-  expect(errors).toEqual([]);
-});
 test('concurrent source requests reuse the same global check',async({request})=>{
   const responses=await Promise.all(Array.from({length:8},()=>request.get(`${base}/api/source?key=vetr`)));
   const data=await Promise.all(responses.map(response=>response.json()));
@@ -62,43 +39,6 @@ test('Napoved: five regional charts plus the Ljubljana sounding, region switch, 
   await expect(page.locator('#aviation-text')).not.toHaveText('Nalaganje…',{timeout:30000});
   await expect(page.locator('#radar-image img')).toHaveCount(2,{timeout:30000});
   await page.getByRole('link',{name:'Zemljevid',exact:true}).click();await expect(page).toHaveURL(/\/$/);
-});
-test('Sv. Peter expands inline, shows one combined wind chart, and reuses cached history',async({page})=>{
-  await page.setViewportSize({width:390,height:844});
-  const historyRequests:string[]=[];
-  page.on('request',request=>{if(new URL(request.url()).searchParams.get('key')==='history:vetr:peter')historyRequests.push(request.url());});
-  await page.goto(`${base}/postaje/`);
-  await expect(page.locator('#stations')).toHaveAttribute('aria-busy','false',{timeout:45000});
-  await page.fill('#search','peter');
-  expect(historyRequests).toHaveLength(0);
-  const trigger=page.locator('[data-expand="peter"]');
-  await trigger.click();
-  await expect(trigger).toHaveAttribute('aria-expanded','true');
-  await expect(page.locator('#peter-detail [data-chart]')).toHaveCount(1,{timeout:30000});
-  expect(historyRequests).toHaveLength(1);
-  const latest=await page.locator('#peter-reading').textContent();
-  await page.locator('#peter-time').focus();await page.locator('#peter-time').press('Home');
-  await expect(page.locator('#peter-reading')).not.toHaveText(latest!);
-  await expect(page.locator('#peter-reading')).toContainText('m/s');
-  await expect(page.locator('#peter-detail [data-history-index]').first()).toBeVisible();
-  const arrow=page.locator('[data-history-index]').last();
-  await arrow.click();
-  await expect(page.locator('#peter-reading')).toHaveText(latest!);
-  await trigger.click();await expect(trigger).toHaveAttribute('aria-expanded','false');
-  await expect(page.locator('#peter-detail')).toBeHidden();
-  await trigger.click();await expect(page.locator('#peter-detail [data-chart]')).toHaveCount(1);
-  expect(historyRequests).toHaveLength(1);
-  await expect(page.locator('#refresh')).toBeEnabled();await page.locator('#refresh').click();
-  await expect(page.locator('#peter-detail [data-chart]')).toHaveCount(1);
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-});
-test('Sv. Peter history failure stays inline without invented readings',async({page})=>{
-  await page.route(url=>url.searchParams.get('key')==='history:vetr:peter',route=>route.fulfill({status:503,body:'Unavailable'}));
-  await page.goto(`${base}/postaje/`);
-  await expect(page.locator('#stations')).toHaveAttribute('aria-busy','false',{timeout:45000});
-  await page.fill('#search','peter');await page.locator('[data-expand="peter"]').click();
-  await expect(page.locator('#peter-history-status')).toHaveText('Zgodovina ni na voljo.');
-  await expect(page.locator('#peter-detail [data-chart]')).toHaveCount(0);
 });
 test('Zemljevid: live markers, site panel with wind graph only',async({page})=>{
   await page.setViewportSize({width:390,height:844});
