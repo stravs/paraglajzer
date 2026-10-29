@@ -35,6 +35,13 @@ function number(value: unknown): number | null {
   const n = typeof value === 'number' ? value : parseFloat(String(value));
   return Number.isFinite(n) ? n : null;
 }
+// vetr dates wind by the end of its 15-min bin, so the newest reading can sit in the future (10:45 at
+// 10:43). statusData holds the real send time; the earlier of the two is used, so old wind data with a
+// fresh status still shows as stale.
+function vetrTime(e: {windData?: {timestamp?: unknown}; statusData?: {timestamp?: unknown}}): string | null {
+  const times = [e.windData?.timestamp, e.statusData?.timestamp].map(t => Date.parse(String(t ?? ''))).filter(Number.isFinite);
+  return times.length ? new Date(Math.min(...times)).toISOString() : null;
+}
 export function parseVetr(html: string): Station[] {
   const match = html.match(/const data\s*=\s*(\[[\s\S]*?\]);/);
   if (!match) throw new Error('Station data missing');
@@ -44,7 +51,7 @@ export function parseVetr(html: string): Station[] {
     id: `vetr-${e.station.name}`, name: String(e.station.full_name || e.station.name), region: 'Gorenjska', source: 'vetr',
     url: `https://vetr.si/${encodeURIComponent(e.station.name)}`, avg: number(e.windData?.avg), gust: number(e.windData?.max),
     direction: ['S','SV','V','JV','J','JZ','Z','SZ'][e.windData?.dir] || '—',
-    observedAt: e.windData?.timestamp || null, interval: number(e.prefsData?.prefs?.send_data_interval_min) || 10,
+    observedAt: vetrTime(e), interval: number(e.prefsData?.prefs?.send_data_interval_min) || 10,
     note: plain(String(e.station.message || '')),
     location: coordinates(e.station.location) ?? locations[`vetr-${e.station.name}`] ?? null,
   }));

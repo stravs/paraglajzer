@@ -10,6 +10,12 @@ test('vetr exposes only normalized weather, not device credentials',()=>{
   assert.ok(!JSON.stringify(stations).includes('secret'));
   assert.throws(()=>parseVetr('<html>changed</html>'));
 });
+test('vetr uses the send time, not the 15-min bin end',()=>{
+  const entry=(wind:string,status:string)=>({station:{active:true,name:'peter'},windData:{avg:1,timestamp:wind},statusData:{timestamp:status}});
+  const [fresh,old]=parseVetr(`const data = ${JSON.stringify([entry('2026-10-29T10:45:00+01:00','2026-10-29T10:37:44.922+01:00'),entry('2026-10-29T09:00:00+01:00','2026-10-29T10:37:44.922+01:00')])};`);
+  assert.equal(fresh.observedAt,'2026-10-29T09:37:44.922Z');
+  assert.equal(old.observedAt,'2026-10-29T08:00:00.000Z');
+});
 test('Skytech parses table rows and preserves missing wind as null',()=>{
   const html=`<h1>Primorska</h1><table><tr><th>Header</th></tr><tr><td><a onclick="show('graf','abcdef')">Kovk</a></td><td>0.0 m/s</td><td>--</td><td>JZ</td><td>8&deg;C</td><td>12:34 26.10.2026</td></tr></table>`;
   const [station]=parseSkytech(html);assert.equal(station.name,'Kovk');assert.equal(station.region,'Primorska');assert.equal(station.avg,0);assert.equal(station.gust,null);assert.equal(station.observedAt,'2026-10-26T11:34:00.000Z');
