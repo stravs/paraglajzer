@@ -19,10 +19,10 @@ import Layout from '../layouts/Layout.astro';
   <header class="absolute inset-x-0 top-0 z-[700] flex h-12 items-center justify-center border-b border-zinc-200 bg-white px-3 shadow-sm transition-all duration-300 ease-out motion-reduce:transition-none max-md:invisible max-md:-translate-y-full max-md:opacity-0 group-data-[header]:visible group-data-[header]:translate-y-0 group-data-[header]:opacity-100">
     <p class="text-base font-semibold">Agregator veternih postaj</p>
   </header>
-  <!-- On phones the search bar is at the bottom, so the map's bottom controls move up above it. Control buttons are
+  <!-- On phones the search bar (and the time slider, once shown) are at the bottom, so the map's bottom controls move up above them. Control buttons are
        44 px (finger size) instead of MapLibre's 29 px, with bigger icons. The markers' z-indexes stay inside
        their own container (isolate), so arrows never draw over the map controls. -->
-  <div class="absolute inset-0 z-0"><div id="map" class="h-full w-full [&_.maplibregl-canvas-container]:isolate max-md:[&_.maplibregl-ctrl-bottom-right]:mb-14 max-md:[&_.maplibregl-ctrl-bottom-left]:mb-14 [&_.maplibregl-ctrl-group_button]:size-11! [&_.maplibregl-ctrl-group]:rounded-lg! [&_.maplibregl-ctrl-zoom-in_.maplibregl-ctrl-icon]:bg-[length:36px]! [&_.maplibregl-ctrl-zoom-out_.maplibregl-ctrl-icon]:bg-[length:36px]!" role="application" aria-label="Zemljevid postaj"></div></div>
+  <div class="absolute inset-0 z-0"><div id="map" class="h-full w-full [&_.maplibregl-canvas-container]:isolate max-md:[&_.maplibregl-ctrl-bottom-right]:mb-14 max-md:[&_.maplibregl-ctrl-bottom-left]:mb-14 max-md:group-has-[#time:not([hidden])]:[&_.maplibregl-ctrl-bottom-right]:mb-26 max-md:group-has-[#time:not([hidden])]:[&_.maplibregl-ctrl-bottom-left]:mb-26 [&_.maplibregl-ctrl-group_button]:size-11! [&_.maplibregl-ctrl-group]:rounded-lg! [&_.maplibregl-ctrl-zoom-in_.maplibregl-ctrl-icon]:bg-[length:36px]! [&_.maplibregl-ctrl-zoom-out_.maplibregl-ctrl-icon]:bg-[length:36px]!" role="application" aria-label="Zemljevid postaj"></div></div>
   <!-- Phones: at the bottom, results open upwards (column reversed). Desktop: top left, results below. -->
   <div class="absolute inset-x-2 bottom-2 z-[600] flex flex-col-reverse gap-1 md:top-14 md:right-auto md:bottom-auto md:w-80 md:flex-col">
     <!-- Search box and a separate Napoved button beside it. -->
@@ -37,6 +37,12 @@ import Layout from '../layouts/Layout.astro';
     </div>
     <ul id="search-results" role="listbox" aria-label="Zadetki" hidden class="max-h-[50dvh] overflow-y-auto rounded-lg bg-white py-1 shadow-md max-md:flex-col-reverse max-md:[&:not([hidden])]:flex md:max-h-80"></ul>
     <p id="map-status" role="status" class="w-fit rounded bg-white/90 px-2 py-1 text-xs text-zinc-600 empty:hidden">Nalaganje…</p>
+    <!-- Time slider: arrows at an earlier time (the last few hours); hidden until there is history. See "Time slider" in map.ts. -->
+    <div id="time" hidden class="flex items-center gap-1 rounded-lg bg-white pr-3 shadow-md">
+      <button id="time-play" type="button" aria-pressed="false" class="grid size-11 shrink-0 place-items-center rounded-lg text-zinc-700 hover:text-black" aria-label="Predvajaj zadnje ure" title="Predvajaj zadnje ure"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button>
+      <input id="time-slider" type="range" min="-180" max="0" step="10" value="0" aria-label="Čas na zemljevidu" class="min-w-0 flex-1 accent-blue-600" />
+      <output id="time-label" for="time-slider" class="w-24 shrink-0 text-right text-xs text-zinc-600 tabular-nums">zdaj</output>
+    </div>
   </div>
   <!-- Site panel: bottom sheet on phones (slides up); on desktop a card at the top right, only as tall as its
        content (slides in from the right). Closed = invisible, faded and moved off; see setPanel in map.ts. -->

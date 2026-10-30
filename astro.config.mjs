@@ -11,7 +11,9 @@ export default defineConfig({
   session: false,
   output: 'server',
   vite: {
-    plugins: [tailwindcss()]
+    plugins: [tailwindcss()],
+    // FAKE_DATA=1 npm run dev: made-up wind history on the map, see src/lib/trail.ts. Off in builds.
+    define: { __FAKE_DATA__: JSON.stringify(process.env.FAKE_DATA === '1' && process.argv.includes('dev')) }
   },
 
   adapter: cloudflare()

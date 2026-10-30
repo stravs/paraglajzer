@@ -7,7 +7,8 @@ import type { Station } from '../lib/sources';
 import type { WindSample } from '../lib/history';
 import { stationSpots } from '../lib/station-spots';
 import { $,escape,date,freshness,read,save,source,sourceLabel,startPolling,type Snapshot } from './weather';
-import { windCharts,sampleLabel,sampleReading,windColor } from './wind-charts';
+import { windCharts,sampleReading,windColor } from './wind-charts';
+import { trailHours,type Trail } from '../lib/trail';
 import { windRose } from './rose';
 import type { WindRose } from '../lib/rose';
 
@@ -96,7 +97,7 @@ function arrowShape(deg:number|undefined,inner:string,outer=inner) {
     +shape(`fill="${inner}" stroke="${edge}" stroke-width="${(edgeWidth/innerScale).toFixed(2)}"`,innerScale);
 }
 function icon(station:Station) {
-  const {stale}=freshness(station);
+  const {stale}=freshness(station,viewTime??Date.now());
   const isSelected=selected?.id===station.id;
   const fill=windColor(station.avg),stroke=windColor(station.gust??station.avg);
   const deg=degrees[station.direction];
@@ -110,7 +111,7 @@ function icon(station:Station) {
   return {arrow,label,labelTop:size/2+2};
 }
 function label(station:Station) {
-  return `${station.name} · veter ${speed(station.avg)} m/s · sunki ${speed(station.gust)} m/s · ${station.direction} · ${freshness(station).label}`;
+  return `${station.name} · veter ${speed(station.avg)} m/s · sunki ${speed(station.gust)} m/s · ${station.direction} · ${freshness(station,viewTime??Date.now()).label}`;
 }
 // A Skytech station with the same site name as a nearby vetr station is not shown.
 // vetr names add a detail after " - " ("Gozd - Testna"). The distance check keeps
@@ -149,18 +150,58 @@ function renderMarkers() {
       labelMarker=new Marker({element:labelElement,anchor:'top'}).setLngLat(at).addTo(map);
       markers.set(station.id,marker);labels.set(station.id,labelMarker);
     }
-    const {arrow,label:text,labelTop}=icon(station);
+    const shown=atViewTime(station);
+    const {arrow,label:text,labelTop}=icon(shown);
     const element=marker.setLngLat(at).setOffset([offset,0]).getElement();
     const labelElement=labelMarker.setLngLat(at).setOffset([offset,labelTop]).getElement();
     element.innerHTML=arrow;labelElement.innerHTML=text;
     // All arrows above all labels; within each, selected above fresh above stale, so live readings are
     // not hidden by dead stations.
-    const rank=selected?.id===station.id?2:freshness(station).stale?0:1;
+    const rank=selected?.id===station.id?2:freshness(shown,viewTime??Date.now()).stale?0:1;
     element.style.zIndex=String(4+rank);labelElement.style.zIndex=String(1+rank);
-    element.setAttribute('title',label(station));element.setAttribute('aria-label',label(station));
+    element.setAttribute('title',label(shown));element.setAttribute('aria-label',label(shown));
   }
 }
 
+// ---- Time slider ----
+// Shows the arrows at an earlier time, up to trailHours back, from the history the Worker keeps (lib/trail.ts).
+// Each station shows its last reading at or before that time; none → a grey dot. The site panel stays current.
+let trail:Trail={},viewTime:number|null=null,playing=0;
+const slider=$<HTMLInputElement>('time-slider'),play=$('time-play');
+slider.min=String(-trailHours*60);
+function atViewTime(station:Station):Station {
+  if(viewTime===null)return station;
+  const reading=(trail[station.id]??[]).findLast(reading=>Date.parse(reading.observedAt??'')<=viewTime!);
+  return {...station,...reading??{observedAt:null,avg:null,gust:null,direction:'—'}};
+}
+// The slider shows once the history covers about trailHours. After a deploy it starts empty and fills as
+// readings come in; until then it stays hidden, so its range never starts with no data.
+const historyFull=()=>Object.values(trail).some(readings=>Date.parse(readings[0].observedAt??'')<=Date.now()-(trailHours*60-20)*60000);
+async function loadTrail() {
+  try {const result=await source<Trail>('trail');if(result.data)trail=result.data;}
+  catch {/* Without history, past times show grey dots. */}
+}
+function setTime(minutes:number) {
+  slider.value=String(minutes);
+  viewTime=minutes<0?Date.now()+minutes*60000:null;
+  // How long ago: "pred 1 h 20 min".
+  const hours=Math.floor(-minutes/60),rest=-minutes%60;
+  $('time-label').textContent=viewTime===null?'zdaj':`pred ${[hours&&`${hours} h`,rest&&`${rest} min`].filter(Boolean).join(' ')}`;
+  renderMarkers();
+}
+const playIcon='<path d="M8 5v14l11-7z" fill="currentColor"/>',pauseIcon='<path d="M7 5h3v14H7zM14 5h3v14h-3z" fill="currentColor"/>';
+function stop() {
+  clearInterval(playing);playing=0;
+  play.setAttribute('aria-pressed','false');play.querySelector('svg')!.innerHTML=playIcon;
+}
+slider.addEventListener('input',async()=>{stop();setTime(Number(slider.value));await loadTrail();renderMarkers();});
+// Play: from trailHours back to now in 10-minute steps, half a second each.
+play.addEventListener('click',async()=>{
+  if(playing){stop();return;}
+  play.setAttribute('aria-pressed','true');play.querySelector('svg')!.innerHTML=pauseIcon;
+  playing=window.setInterval(()=>{const next=Number(slider.value)+10;setTime(next>=0?0:next);if(next>=0)stop();},500);
+  await loadTrail();setTime(-trailHours*60);
+});
 
 // ---- Site panel ----
 let history:Snapshot<WindSample[]>|null=null;
@@ -385,6 +426,8 @@ async function update() {
     } catch {errors.push(`${key}: vir ni dosegljiv`);}
   }));
   $('map-status').textContent=errors.join(' · ');
+  if($('time').hidden){await loadTrail();$('time').hidden=!historyFull();}
+  else if(viewTime!==null)await loadTrail();
   for(const placeholder of placeholders.splice(0))placeholder.remove();
   renderMarkers();
   // A shared link opens its site after the first load (once all four listings are in).

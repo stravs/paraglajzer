@@ -85,8 +85,9 @@ export function startPolling(update:()=>Promise<unknown>,tick?:()=>void) {
   void refresh();
 }
 
-export function freshness(station:Station) {
-  const minutes=(Date.now()-Date.parse(station.observedAt||''))/60000;
+// now: the time looked at (the map's time slider can go back).
+export function freshness(station:Station,now=Date.now()) {
+  const minutes=(now-Date.parse(station.observedAt||''))/60000;
   // ARSO (every 30 min) is stale after 60 min; other sources after 2.5 report intervals, at least 15 min.
   const limit=station.source==='arso'?60:Math.max(15,station.interval*2.5);
   const stale=!Number.isFinite(minutes)||minutes>limit||minutes < -5;

@@ -12,7 +12,10 @@ Astro + Tailwind + Cloudflare Workers. The Worker (`src/worker.ts`) fetches and 
 ```sh
 npm install
 npm run dev -- --host
+npm run dev:fake -- --host   # made-up wind history for the map's time slider
 ```
+
+The map's time slider uses the last 3 h of readings, which the Worker records from each station listing (a cron checks the listings every 10 min). In dev the cron doesn't run, so `dev:fake` makes up a history from the current readings.
 
 ## Test
 

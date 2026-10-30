@@ -2,6 +2,10 @@ import { handle } from '@astrojs/cloudflare/handler';
 import { DurableObject } from 'cloudflare:workers';
 import { sourceFor, layers, keepMissing, stationKeys, clockSkew, type Frame, type Source, type Station } from './lib/sources';
 import { regionalCharts, type JadralciRun } from './lib/jadralci';
+import { addReadings, fakeTrail, type Trail } from './lib/trail';
+
+// Set by astro.config.mjs from FAKE_DATA=1 (dev only): the map's history is made up from the current readings.
+declare const __FAKE_DATA__: boolean;
 
 // Browsers may keep a response until the server's next upstream check is due; nothing newer exists before then.
 const cacheUntil = (nextCheck: number) => ({'Cache-Control':`private, max-age=${Math.max(0, Math.floor((nextCheck - Date.now()) / 1000))}`});
@@ -35,6 +39,19 @@ export class SourceCache extends DurableObject<Env> {
       const entries = await Promise.all(stationKeys.map(k => this.cached(k, sourceFor(k)!)));
       const nextCheck = Math.min(...entries.map(entry => entry.nextCheck));
       return Response.json({sources:Object.fromEntries(stationKeys.map((k, i) => [k, view(entries[i])])), nextCheck}, {headers:cacheUntil(nextCheck)});
+    }
+    // Recent readings of all stations (see lib/trail.ts), due with the listings.
+    if (key === 'trail') {
+      const entries = await Promise.all(stationKeys.map(k => this.cached(k, sourceFor(k)!)));
+      const nextCheck = Math.min(...entries.map(entry => entry.nextCheck));
+      let data: Trail;
+      if (__FAKE_DATA__) data = fakeTrail(entries.flatMap(entry => Array.isArray(entry.data) ? entry.data as Station[] : []));
+      else {
+        const trails = await this.ctx.storage.get<Trail>(stationKeys.map(k => `trail:${k}`));
+        data = Object.assign({}, ...trails.values());
+      }
+      const checkedAt = Math.max(...entries.map(entry => entry.checkedAt));
+      return Response.json({data, fetchedAt:checkedAt, checkedAt, nextCheck, error:null}, {headers:cacheUntil(nextCheck)});
     }
     let source = sourceFor(key);
     if (!source) return new Response('Unknown source', {status:404});
@@ -104,6 +121,7 @@ export class SourceCache extends DurableObject<Env> {
         const data=source.stations ? keepMissing(loaded as Station[],previous?.data) : loaded;
         const entry:Snapshot={data,fetchedAt:now,checkedAt:now,nextCheck:due(source,data,now),error:null,failures:0};
         await this.ctx.storage.put(key,entry);
+        if (source.stations) await this.record(key,data as Station[]);
         return entry;
       }
       const headers=new Headers(source.init?.headers);
@@ -128,6 +146,7 @@ export class SourceCache extends DurableObject<Env> {
         const data=source.stations ? keepMissing(parsed as Station[],previous?.data) : parsed;
         entry={data,fetchedAt:now,checkedAt:now,nextCheck:due(source,data,now),error:null,failures:0,
           etag:response.headers.get('ETag') || undefined,modified:response.headers.get('Last-Modified') || undefined,contentType};
+        if (source.stations) await this.record(key,data as Station[]);
       }
       await this.ctx.storage.put(key,entry);
       return entry;
@@ -141,6 +160,11 @@ export class SourceCache extends DurableObject<Env> {
       await this.ctx.storage.put(key,entry);
       return entry;
     }
+  }
+  private async record(key: string, stations: Station[]) {
+    if (__FAKE_DATA__) return;
+    const trailKey = `trail:${key}`;
+    await this.ctx.storage.put(trailKey, addReadings(await this.ctx.storage.get<Trail>(trailKey) ?? {}, stations));
   }
 }
 // /vetr/ asks for a password (secret VETR_PASSWORD; any user name). Without the secret it stays locked.
@@ -156,11 +180,16 @@ export default {
       return new Response('Geslo je napačno.', {status:401, headers:{'WWW-Authenticate':'Basic realm="Paraglajzer", charset="UTF-8"', 'Cache-Control':'no-store'}});
     if (url.pathname==='/api/source') {
       const key=url.searchParams.get('key') || '';
-      if (key!=='stations' && !sourceFor(key)) return new Response('Unknown source',{status:404});
+      if (key!=='stations' && key!=='trail' && !sourceFor(key)) return new Response('Unknown source',{status:404});
       if (request.method!=='GET') return new Response('Method not allowed',{status:405,headers:{Allow:'GET'}});
       const stub=env.SOURCES.get(env.SOURCES.idFromName('shared-v1'));
       return stub.fetch(`https://cache.internal/?key=${encodeURIComponent(key)}`);
     }
     return handle(request,env,ctx);
+  },
+  // Every 10 min (wrangler.jsonc): check the station listings, so the map's history has no gaps while nobody
+  // has the app open. Providers are still asked only when each listing is due.
+  async scheduled(_controller,env) {
+    await env.SOURCES.get(env.SOURCES.idFromName('shared-v1')).fetch('https://cache.internal/?key=stations');
   },
 } satisfies ExportedHandler<Env>;
