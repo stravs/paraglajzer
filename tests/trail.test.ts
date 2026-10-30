@@ -6,14 +6,14 @@ import type { Station } from '../src/lib/sources.ts';
 const station = (observedAt: string | null, avg = 3): Station => ({id:'vetr-a', name:'A', region:'', source:'vetr', url:'', avg, gust:avg+2, direction:'J', observedAt, interval:10, note:'', location:null});
 const now = Date.parse('2026-10-30T12:00:00Z');
 
-test('history adds new readings once and drops ones older than 3 h', () => {
-  let trail = addReadings({}, [station('2026-10-30T08:50:00Z')], now);
+test('history adds new readings once and drops ones older than 4 h (3 h slider + 1 h)', () => {
+  let trail = addReadings({}, [station('2026-10-30T07:50:00Z')], now);
   assert.deepEqual(trail, {});
   trail = addReadings(trail, [station('2026-10-30T11:40:00Z', 2)], now);
   trail = addReadings(trail, [station('2026-10-30T11:40:00Z', 2)], now);
   trail = addReadings(trail, [station('2026-10-30T11:50:00Z', 4)], now);
   assert.deepEqual(trail['vetr-a'].map(r => r.avg), [2, 4]);
-  assert.deepEqual(addReadings(trail, [station(null)], now + 3*3600000), {});
+  assert.deepEqual(addReadings(trail, [station(null)], now + 4*3600000), {});
 });
 
 test('fake history ends at the current reading and is the same each time', () => {

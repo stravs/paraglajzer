@@ -4,11 +4,14 @@ import type { Station } from './sources.ts';
 // The Worker records each new listing reading; no extra requests to the providers.
 export type Reading = Pick<Station, 'observedAt' | 'avg' | 'gust' | 'direction'>;
 export type Trail = Record<string, Reading[]>;
+// The slider goes trailHours back. One extra hour is kept, so even at the far end each station has its last
+// reading from before that time (ARSO only reports every 30 min).
 export const trailHours = 3;
+const keptHours = trailHours + 1;
 
-// Adds each station's reading if it is new and drops readings older than trailHours.
+// Adds each station's reading if it is new and drops readings older than keptHours.
 export function addReadings(trail: Trail, stations: Station[], now = Date.now()): Trail {
-  const cutoff = now - trailHours*3600000, result: Trail = {};
+  const cutoff = now - keptHours*3600000, result: Trail = {};
   for (const station of stations) {
     const readings = (trail[station.id] ?? []).filter(reading => Date.parse(reading.observedAt ?? '') >= cutoff);
     const time = Date.parse(station.observedAt ?? '');

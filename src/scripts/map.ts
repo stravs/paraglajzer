@@ -174,9 +174,9 @@ function atViewTime(station:Station):Station {
   const reading=(trail[station.id]??[]).findLast(reading=>Date.parse(reading.observedAt??'')<=viewTime!);
   return {...station,...reading??{observedAt:null,avg:null,gust:null,direction:'—'}};
 }
-// The slider shows once the history covers about trailHours. After a deploy it starts empty and fills as
+// The slider shows once the history covers trailHours. After a deploy it starts empty and fills as
 // readings come in; until then it stays hidden, so its range never starts with no data.
-const historyFull=()=>Object.values(trail).some(readings=>Date.parse(readings[0].observedAt??'')<=Date.now()-(trailHours*60-20)*60000);
+const historyFull=()=>Object.values(trail).some(readings=>Date.parse(readings[0].observedAt??'')<=Date.now()-trailHours*3600000);
 async function loadTrail() {
   try {const result=await source<Trail>('trail');if(result.data)trail=result.data;}
   catch {/* Without history, past times show grey dots. */}
