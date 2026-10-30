@@ -295,7 +295,7 @@ export function sourceFor(key: string, anchor?: string): Source | null {
   if (key === 'vetr') return { url:'https://vetr.si/', interval:600, stations:true, parse:body => gorenjska(parseVetr(body)), next:nextVetrCheck };
   if (key === 'skytech') return { url:'https://skytech.si/skytechsys/data.php', interval:600, init:{method:'POST', body:'c=tabela', headers:{'Content-Type':'application/x-www-form-urlencoded'}}, stations:true, parse:parseSkytech };
   if (key === 'aviation') return { url:`${ARSO}/uploads/probase/www/aviation/fproduct/text/sl/aviation.txt`, interval:600, parse:body => body.replace(/\^/g,'Č').replace(/~/g,'č').replace(/\[/g,'Š').replace(/\{/g,'š').replace(/@/g,'Ž').replace(/`/g,'ž') };
-  if (key === 'sounding') return { url:`${ARSO}/uploads/probase/www/aviation/observ/upper/graphic/sigps_ljubljana-bezigrad.png`, interval:1800, image:true };
+  if (key === 'sounding') return { url:`${ARSO}/uploads/probase/www/observ/upper/sigps_ljubljana-bezigrad_zoom.png`, interval:1800, image:true };
   const [type,id] = key.split(':');
   if (type==='thermal' && key===`thermal:${id}` && Object.hasOwn(thermalRegions,id)) return { url:`${ARSO}/uploads/probase/www/aviation/RSS/termika${id}.xml`, interval:600, parse:parseThermals };
   if (type==='zaladin' && key===`zaladin:${id}` && Object.hasOwn(layers,id)) return { url:`https://zaladin.razor.si/zaladin.php?slika=${id}`, interval:1800, parse:parseFrames };

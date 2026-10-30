@@ -21,9 +21,11 @@ async function loadThermals() {
 // Chart images link to ARSO's original on desktop only; on phones they are swiped, so taps do nothing
 // (the caption's "ARSO ↗" link stays).
 const imageLinkClass='block max-md:pointer-events-none';
-// The measured Ljubljana sounding (napoved.astro) sits after the forecast charts. It updates every 30 min,
-// while the regional charts only change with a new model run, so it refreshes on its own.
-const soundingUrl='https://meteo.arso.gov.si/uploads/probase/www/aviation/observ/upper/graphic/sigps_ljubljana-bezigrad.png';
+// The measured Ljubljana sounding (napoved.astro) sits after the forecast charts: ARSO's zoomed chart, 300–3200 m,
+// the flying heights (the full one goes to 16 km). ARSO posts it about once a day; it is checked every 30 min
+// (a cheap "not modified" answer until a new one is out), while the regional charts only change with a new
+// model run, so it refreshes on its own.
+const soundingUrl='https://meteo.arso.gov.si/uploads/probase/www/observ/upper/sigps_ljubljana-bezigrad_zoom.png';
 async function loadSounding() {
   const target=document.getElementById('sounding-image');
   if(!target)return;
