@@ -4,6 +4,7 @@
 // Kamšak and Čoklečeva gora could not be located and are left off the map.
 export const locations:Record<string,[number,number]> = {
   'vetr-gozd':[46.3395,14.3313],
+  'skytech-b4d5f50ce34b6806ee9d904b2f8df2oc':[45.8866,13.9592], // Kovk: OSM launch
   'skytech-5d5304a4b175fc49bba1dfa732e053d4':[46.3343,15.3864], // Konjiška gora
   'skytech-12ed4a5be07761ffa34673194c1dca4a':[46.3609,15.3338], // Mala Gora: the only Mala gora peak in Štajerska; no launch in OSM
   'skytech-0ad3eca9046d57297308fd14affd4647':[46.1822,15.2057], // Malič: OSM launch

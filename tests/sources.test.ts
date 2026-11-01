@@ -42,8 +42,10 @@ test('vetr rose photo is a vetr.si image, or none',()=>{
   assert.equal(good.roseImage,'https://vetr.si/static/img/peter_wide.jpg');assert.equal(bad.roseImage,undefined);
 });
 test('Skytech parses table rows and preserves missing wind as null',()=>{
-  const html=`<h1>Primorska</h1><table><tr><th>Header</th></tr><tr><td><a onclick="show('graf','abcdef')">Kovk</a></td><td>0.0 m/s</td><td>--</td><td>JZ</td><td>8&deg;C</td><td>12:34 26.10.2026</td></tr></table>`;
-  const [station]=parseSkytech(html);assert.equal(station.name,'Kovk');assert.equal(station.region,'Primorska');assert.equal(station.avg,0);assert.equal(station.gust,null);assert.equal(station.observedAt,'2026-10-26T11:34:00.000Z');
+  const html=`<h1>Primorska</h1><table><tr><th>Header</th></tr><tr><td><a onclick="show('graf','b4d5f50ce34b6806ee9d904b2f8df2oc')">Kovk</a></td><td>0.0 m/s</td><td>--</td><td>JZ</td><td>8&deg;C</td><td>12:34 26.10.2026</td></tr></table>`;
+  // Kovk's real ID is not hex ("2oc"); it must still be read, placed on the map and have a graph.
+  const [station]=parseSkytech(html);assert.equal(station.name,'Kovk');assert.deepEqual(station.location,[45.8866,13.9592]);
+  assert.ok(sourceFor('history:skytech:b4d5f50ce34b6806ee9d904b2f8df2oc'));assert.equal(station.region,'Primorska');assert.equal(station.avg,0);assert.equal(station.gust,null);assert.equal(station.observedAt,'2026-10-26T11:34:00.000Z');
   assert.throws(()=>parseSkytech('<html>changed</html>'));
 });
 test('Ljubljana local timestamps use winter and summer offsets',()=>{
@@ -127,8 +129,13 @@ test('station listings keep a missing station while its reading is under 2 h old
   assert.equal(keepMissing([],[{...station('far','2026-10-27T09:50:00Z'),source:'vetr' as const,location:[46.26,15.74]}],now).length,0);
   assert.equal(keepMissing([],[{...station('far','2026-10-27T09:50:00Z'),location:[46.26,15.74]}],now).length,1);
 });
-test('ARSO stations come from per-station latest files, Lesce included',()=>{
+test('ARSO stations come from per-station latest files, Lesce and Nanos included',()=>{
   assert.ok(arsoStations.includes('LESCE_'));
+  assert.ok(arsoStations.includes('NANOS_'));
+  // Nanos is outside Gorenjska but on the list, so an older reading is kept like the others.
+  const now=Date.parse('2026-10-27T10:00:00Z');
+  const nanos={id:'arso-NANOS_',name:'Nanos',region:'',source:'arso' as const,url:'',avg:1,gust:2,direction:'S',observedAt:'2026-10-27T09:50:00Z',interval:30,note:'',location:[45.7714,14.0536] as [number,number]};
+  assert.equal(keepMissing([],[nanos],now).length,1);
   assert.ok(arsoStations.every(id=>/^[A-Z0-9_-]{1,40}$/.test(id)));
   assert.equal(typeof sourceFor('arso')?.load,'function');
 });

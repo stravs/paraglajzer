@@ -27,11 +27,10 @@ export interface Source { url: string; interval: number; load?: () => Promise<un
 export function keepMissing(stations: Station[], previous: unknown, now = Date.now()): Station[] {
   if (!Array.isArray(previous)) return stations;
   const ids = new Set(stations.map(s => s.id));
-  // Only stations inside the covered area (Skytech: all of Slovenia; others: Gorenjska and Kamnik, as an
-  // older cached listing may hold more), and only ARSO stations still on the list (one removed on
-  // purpose should not linger).
+  // Only stations inside the covered area (Skytech: all of Slovenia; ARSO: its station list, so one removed
+  // on purpose does not linger; others: Gorenjska and Kamnik, as an older cached listing may hold more).
   return [...stations, ...(previous as Station[]).filter(s => !ids.has(s.id) && now - Date.parse(s.observedAt ?? '') < 2 * 3600000
-    && (s.source === 'skytech' || (s.location !== null && inGorenjska(s.location))) && (s.source !== 'arso' || arsoStations.includes(s.id.slice(5))))];
+    && (s.source === 'skytech' || (s.source === 'arso' ? arsoStations.includes(s.id.slice(5)) : s.location !== null && inGorenjska(s.location))))];
 }
 export function plain(s: string): string {
   return s.replace(/<[^>]*>/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&deg;/g, '°').replace(/\s+/g, ' ').trim();
@@ -121,7 +120,8 @@ export function parseSkytech(html: string, skew = 0): Station[] {
     region = plain(chunk.match(/<h1>(.*?)<\/h1>/s)?.[1] || region);
     for (const row of chunk.matchAll(/<tr>([\s\S]*?)<\/tr>/g)) {
       const cells = [...row[1].matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map(m => plain(m[1]));
-      const id = row[1].match(/show\('graf','([a-f0-9]+)'\)/)?.[1];
+      // IDs look like hex, but not all are: Kovk's ends in "2oc".
+      const id = row[1].match(/show\('graf','([a-z0-9]+)'\)/)?.[1];
       if (cells.length !== 6 || !id || hiddenSkytech.has(id)) continue;
       stations.push({ id: `skytech-${id}`, name: cells[0], region, source: 'skytech', url: 'https://skytech.si/', avg: number(cells[1]), gust: number(cells[2]), direction: cells[3], observedAt: ljubljanaTime(cells[5], skew), interval: 5, note: '', location: locations[`skytech-${id}`] ?? null });
     }
@@ -184,9 +184,9 @@ export function parseArso(xml: string): Station[] {
 // ARSO's national "latest" file only lists stations with data for the current 10-minute slot, so a
 // station whose reading arrives late (Lesce, every 30 min) can be missing for hours. Each station also has
 // its own small latest file (~10 KB) that always holds its newest reading, so those are used instead.
-// These are the ARSO stations in Gorenjska and Kamnik that report wind (checked 2026-10-27). Vogel is
-// left out: the Skytech Vogel station is shown there instead.
-export const arsoStations = ['BORST_GOREN-VAS_','KREDA-ICA_','KRVAVEC_','LESCE_','LJUBL-ANA_BRNIK_','PASJA-RAV_','RATECE_','RATIT-VEC_','RUDNO-POL_'];
+// These are the ARSO stations in Gorenjska and Kamnik that report wind (checked 2026-10-27), plus Nanos
+// (Primorska, 1242 m). Vogel is left out: the Skytech Vogel station is shown there instead.
+export const arsoStations = ['BORST_GOREN-VAS_','KREDA-ICA_','KRVAVEC_','LESCE_','LJUBL-ANA_BRNIK_','PASJA-RAV_','RATECE_','RATIT-VEC_','RUDNO-POL_','NANOS_'];
 async function loadArso(): Promise<Station[]> {
   const lists = await Promise.all(arsoStations.map(async id => {
     try {
@@ -267,8 +267,9 @@ export function parseThermals(xml: string) {
     return { title:plain(item.title), text:plain(item.description), maxLift };
   }) };
 }
-// vetr, ARSO and Luftar stations are limited to Gorenjska (plus Kamnik), labelled Gorenjska; Skytech
-// covers all of Slovenia with its own region labels. Station history is only served for stations in a
+// vetr and Luftar stations are limited to Gorenjska (plus Kamnik), labelled Gorenjska; ARSO stations come
+// from their own list (arsoStations), those in Gorenjska labelled so too; Skytech covers all of Slovenia
+// with its own region labels. Station history is only served for stations in a
 // cached listing, so it follows the same rule.
 const gorenjska = (stations: Station[]): Station[] =>
   stations.filter(s => s.location !== null && inGorenjska(s.location)).map(s => ({ ...s, region: 'Gorenjska' }));
@@ -285,13 +286,13 @@ export function sourceFor(key: string, anchor?: string): Source | null {
   if (raw) return { url:`https://vetr.si/${raw[1]}/data/wind_all.json?duration=0.5`, interval:600, parse:parseVetrRaw };
   if (rose) return { url:`https://vetr.si/${rose[1]}/data/wind_all.json?duration=1`, interval:600, parse:parseVetrRose };
   if (history?.[1] === 'vetr') return { url:`https://vetr.si/${history[2]}`, interval:600, parse:parseVetrHistory };
-  if (history?.[1] === 'skytech' && /^[a-f0-9]{32}$/.test(history[2])) return { url:'https://skytech.si/skytechsys/data.php', interval:600, init:{method:'POST', body:`c=graf&l=${history[2]}`, headers:{'Content-Type':'application/x-www-form-urlencoded'}}, parse:(body, skew) => parseSkytechHistory(body, anchor ?? new Date().toISOString(), skew) };
+  if (history?.[1] === 'skytech' && /^[a-z0-9]{32}$/.test(history[2])) return { url:'https://skytech.si/skytechsys/data.php', interval:600, init:{method:'POST', body:`c=graf&l=${history[2]}`, headers:{'Content-Type':'application/x-www-form-urlencoded'}}, parse:(body, skew) => parseSkytechHistory(body, anchor ?? new Date().toISOString(), skew) };
   if (key === 'luftar') return { url:'https://www.luftar.si/', interval:600, stations:true, load:async () => gorenjska(await loadLuftar()) };
   const luftarHistory = key.match(/^history:luftar:(kriska|sebenje)$/);
   if (luftarHistory) return { url:luftarUrl(luftarHistory[1] as keyof typeof luftarStations), interval:600, parse:parseLuftarHistory };
   const arsoHistory = key.match(/^history:arso:([A-Z0-9_-]{1,40})$/);
   if (arsoHistory) return { url:`${ARSO}/uploads/probase/www/observ/surface/text/sl/recent/observationAms_${arsoHistory[1]}history.xml`, interval:600, parse:parseArsoHistory };
-  if (key === 'arso') return { url:ARSO, interval:600, stations:true, load:async () => gorenjska(await loadArso()) };
+  if (key === 'arso') return { url:ARSO, interval:600, stations:true, load:async () => (await loadArso()).map(s => s.location && inGorenjska(s.location) ? { ...s, region: 'Gorenjska' } : s) };
   if (key === 'vetr') return { url:'https://vetr.si/', interval:600, stations:true, parse:body => gorenjska(parseVetr(body)), next:nextVetrCheck };
   if (key === 'skytech') return { url:'https://skytech.si/skytechsys/data.php', interval:600, init:{method:'POST', body:'c=tabela', headers:{'Content-Type':'application/x-www-form-urlencoded'}}, stations:true, parse:parseSkytech };
   if (key === 'aviation') return { url:`${ARSO}/uploads/probase/www/aviation/fproduct/text/sl/aviation.txt`, interval:600, parse:body => body.replace(/\^/g,'Č').replace(/~/g,'č').replace(/\[/g,'Š').replace(/\{/g,'š').replace(/@/g,'Ž').replace(/`/g,'ž') };
