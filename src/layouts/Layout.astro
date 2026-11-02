@@ -24,5 +24,8 @@ const pages={Zemljevid:'/',Napoved:'/napoved/'} as const;
       </div>
     </header>}
     <main id="content" class:list={[full?'relative h-dvh':'mx-auto max-w-5xl px-3 py-4 sm:px-5']}><h1 class="sr-only">{page}</h1><slot /></main>
+    <!-- Cloudflare Web Analytics -->
+    <script is:inline type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "ce8bda20dd814901acb3b6048b512b02"}'></script>
+    <!-- End Cloudflare Web Analytics -->
   </body>
 </html>
