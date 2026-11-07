@@ -40,6 +40,9 @@ test('Napoved: five regional charts plus the Ljubljana sounding, region switch, 
   // Text forecast and radar are shown without opening anything.
   await expect(page.locator('#aviation-text')).not.toHaveText('Nalaganje…',{timeout:30000});
   await expect(page.locator('#radar-image img')).toHaveCount(2,{timeout:30000});
+  // Phones: the page links are in the hamburger menu.
+  await expect(page.getByRole('link',{name:'Zemljevid',exact:true})).toBeHidden();
+  await page.getByRole('button',{name:'Meni'}).click();
   await page.getByRole('link',{name:'Zemljevid',exact:true}).click();await expect(page).toHaveURL(/\/$/);
 });
 test('Zemljevid: live markers, site panel with wind graph only',async({page})=>{
@@ -98,6 +101,7 @@ test('Zemljevid: search finds a site without diacritics and opens it',async({pag
   await page.locator('#search-toggle').click();
   await page.locator('#site-search').fill('xyz nonexistent');
   await expect(page.locator('#search-results')).toContainText('Ni zadetkov.');
+  await page.getByRole('button',{name:'Meni'}).click();
   await page.getByRole('link',{name:'Napoved',exact:true}).click();await expect(page).toHaveURL(/\/napoved\//);
 });
 test('Zemljevid: wind layer is the default; with webcams on, wind markers hide and a camera on a station can be tapped; images load only when opened',async({page})=>{

@@ -1,5 +1,6 @@
 ---
 // Dark green bar: logo and the page links. Extra buttons (the map's search) go in the slot, before the links.
+// Phones: the links are in a menu behind a hamburger button; desktop shows them in the bar.
 import Logo from './Logo.astro';
 interface Props { page: string; class?: string }
 const { page, class: className } = Astro.props;
@@ -10,9 +11,20 @@ const pages = { Zemljevid: '/', Napoved: '/napoved/' } as const;
     <Logo class="h-7 w-auto" />Agregator
   </a>
   <slot />
-  <nav class="flex gap-1" aria-label="Strani">
-    {(Object.keys(pages) as (keyof typeof pages)[]).map(name => (
-      <a href={pages[name]} aria-current={page === name ? 'page' : undefined} class:list={['flex min-h-10 items-center rounded-lg px-2.5 font-medium', page === name ? 'bg-white/15' : 'text-white/75 hover:text-white']}>{name}</a>
-    ))}
+  <nav id="menu" aria-label="Strani" class="group/menu relative">
+    <button id="menu-toggle" type="button" aria-expanded="false" aria-controls="menu-links" class="grid size-10 place-items-center rounded-lg text-white/90 hover:bg-white/10 hover:text-white aria-expanded:bg-white/15 md:hidden" aria-label="Meni" title="Meni"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <div id="menu-links" class="flex gap-1 max-md:absolute max-md:top-12 max-md:right-0 max-md:hidden max-md:w-48 max-md:flex-col max-md:rounded-xl max-md:bg-white max-md:p-1.5 max-md:shadow-lg max-md:group-data-[open]/menu:flex">
+      {(Object.keys(pages) as (keyof typeof pages)[]).map(name => (
+        <a href={pages[name]} aria-current={page === name ? 'page' : undefined} class:list={['flex min-h-10 items-center rounded-lg px-2.5 font-medium max-md:min-h-11 max-md:px-3 max-md:text-base', page === name ? 'bg-white/15 max-md:bg-brand/10 max-md:text-brand' : 'text-white/75 hover:text-white max-md:text-zinc-700 max-md:hover:bg-zinc-100 max-md:hover:text-zinc-900']}>{name}</a>
+      ))}
+    </div>
   </nav>
 </header>
+<script>
+  // Hamburger menu: opens and closes with the button; a click elsewhere or Escape closes it.
+  const menu=document.getElementById('menu')!,toggle=document.getElementById('menu-toggle')!;
+  const setMenu=(open:boolean)=>{menu.toggleAttribute('data-open',open);toggle.setAttribute('aria-expanded',String(open));};
+  toggle.addEventListener('click',()=>setMenu(!menu.hasAttribute('data-open')));
+  document.addEventListener('click',event=>{if(!menu.contains(event.target as Node))setMenu(false);});
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&menu.hasAttribute('data-open')){setMenu(false);toggle.focus();}});
+</script>

@@ -2,7 +2,7 @@
 
 Vremenska mreža za outdoor: paragliding weather for Slovenia.
 
-- `/`: map of wind stations (vetr.si, Skytech, ARSO, Luftar). Tap a site for its wind graph. The bottom bar switches the layer: wind, webcams (all ARSO cameras), snow (ARSO's snow depth, new snow and rain) or rivers (ARSO's river flows).
+- `/`: map of wind stations (vetr.si, Skytech, ARSO, Luftar). Tap a site for its wind graph. The layer bar (left edge on phones, bottom on desktop) switches the layer: wind, webcams (all ARSO cameras), snow (ARSO's snow depth, new snow and rain) or rivers (ARSO's river flows).
 - `/napoved/`: ARSO and Zaladin forecasts, sounding, thermals, radar.
 
 Astro + Tailwind + Cloudflare Workers. The Worker (`src/worker.ts`) fetches and caches all sources, so every user shares one copy and providers get few requests.
