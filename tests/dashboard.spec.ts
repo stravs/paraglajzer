@@ -89,7 +89,7 @@ test('Zemljevid: search finds a site without diacritics and opens it',async({pag
   await page.setViewportSize({width:390,height:844});
   await page.goto(base);
   await expect(page.locator('.maplibregl-marker[title^="Kriška gora ·"]')).toBeAttached({timeout:45000});
-  // Phones: the header's search button opens the search box.
+  // The header's search button opens the search box.
   await expect(page.locator('#site-search')).toBeHidden();
   await page.locator('#search-toggle').click();
   await page.locator('#site-search').fill('kriska');
@@ -145,7 +145,7 @@ test('Zemljevid: wind layer is the default; with webcams on, wind markers hide a
   await expect(page.getByRole('button',{name:'Kamere',exact:true})).toHaveAttribute('aria-pressed','true');
   expect(errors).toEqual([]);
 });
-test('Zemljevid: snow layer shows non-zero ARSO stations as bar charts; on desktop a tap opens a bubble, for wind stations too',async({page})=>{
+test('Zemljevid: snow layer shows ARSO stations with snow as bar charts, without rain; on desktop a tap opens a bubble, for wind stations too',async({page})=>{
   const errors:string[]=[];
   page.on('pageerror',error=>errors.push(error.message));
   // Fixed readings: live ones are often all 0.
@@ -164,14 +164,14 @@ test('Zemljevid: snow layer shows non-zero ARSO stations as bar charts; on deskt
   const kredarica=page.getByRole('button',{name:/^Kredarica · snežna odeja 120 cm/});
   await expect(kredarica).toBeVisible();
   await expect(page.locator('.maplibregl-marker[title^="Krvavec"]')).toBeHidden();
-  await expect(kredarica.locator('[style*="height"]')).toHaveCount(3);
-  await expect(page.getByRole('button',{name:/^Vogel · /}).locator('[style*="height"]')).toHaveCount(1);
+  await expect(kredarica.locator('[style*="height"]')).toHaveCount(2);
+  await expect(page.getByRole('button',{name:/^Vogel · /})).toHaveCount(0); // rain only
   await expect(page.getByRole('button',{name:/^Ljubljana · /})).toHaveCount(0);
   // Desktop: it opens in a bubble above the marker.
   await kredarica.click();
   const bubble=page.locator('.maplibregl-popup');
   await expect(bubble.locator('#site-name')).toHaveText('Kredarica');
-  await expect(bubble.locator('#site-card tr')).toHaveCount(3);
+  await expect(bubble.locator('#site-card tr')).toHaveCount(2);
   await expect(bubble).toContainText('15 cm/24 h');
   await page.keyboard.press('Escape');
   await expect(bubble).toHaveCount(0);
@@ -199,7 +199,9 @@ test('Zemljevid: rivers layer shows ARSO flows with a rating dot; tapping one op
   await page.addInitScript(()=>localStorage.setItem('mapView',JSON.stringify({center:[14.6,46.08],zoom:8.5})));
   await page.goto(base);
   await expect(page.locator('.maplibregl-marker[title^="Krvavec"]')).toBeAttached({timeout:45000});
+  await expect(page.locator('#river-legend')).toBeHidden();
   await page.getByRole('button',{name:'Reke',exact:true}).click();
+  await expect(page.locator('#river-legend')).toBeVisible();
   const litija=page.getByRole('button',{name:/^Sava · Litija · pretok 612 m³\/s/});
   await expect(litija).toBeVisible();
   await expect(litija.locator('.bg-red-600')).toHaveCount(1);

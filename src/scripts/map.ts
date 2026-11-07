@@ -1,4 +1,4 @@
-import { Map as MapLibre,Marker,NavigationControl,Popup,setWorkerUrl,type StyleSpecification } from 'maplibre-gl';
+import { AttributionControl,Map as MapLibre,Marker,NavigationControl,Popup,setWorkerUrl,type StyleSpecification } from 'maplibre-gl';
 import { LogoControl } from '@maptoolkit/maplibre-logo-control';
 import '@maptoolkit/maplibre-logo-control/style.css';
 // MapLibre finds its worker next to its own module, which Vite moves; point it at the real file.
@@ -54,7 +54,7 @@ const map=new MapLibre({
     ?{center:savedView!.center as [number,number],zoom:savedView!.zoom as number}
     :matchMedia('(min-width: 768px)').matches
     ?{bounds:[[13.38,45.42],[16.6,46.88]],fitBoundsOptions:{padding:{top:110,bottom:40,left:40,right:60}}}
-    :{bounds:[[14.17,46.34],[14.34,46.44]],fitBoundsOptions:{padding:{top:60,bottom:110,left:60,right:60}}}),maxPitch:0,dragRotate:false,touchPitch:false,attributionControl:{compact:false},
+    :{bounds:[[14.17,46.34],[14.34,46.44]],fitBoundsOptions:{padding:{top:60,bottom:110,left:60,right:60}}}),maxPitch:0,dragRotate:false,touchPitch:false,attributionControl:false,
   // Maptoolkit "Hiking" (vector, hillshading, contours; free, no key), with the layers above left out (trimStyle).
   style:'https://styles.maptoolkit.org/hiking.json',
   maxBounds:slovenia,
@@ -66,7 +66,9 @@ map.on('moveend',()=>{
   save('mapView',{center:[+lng.toFixed(5),+lat.toFixed(5)],zoom:+map.getZoom().toFixed(2)});
 });
 // Maptoolkit's terms require its logo and a fully visible credit on the map.
-map.addControl(new LogoControl());
+// Both at the top, just under the header (index.astro); the bottom has the slider and buttons.
+map.addControl(new LogoControl(),'top-left');
+map.addControl(new AttributionControl({compact:false}),'top-right');
 map.addControl(new NavigationControl({showCompass:false}),'bottom-right');
 
 // Compass labels used by both vetr and Skytech tables; the wind comes from this direction.
@@ -209,7 +211,7 @@ play.addEventListener('click',async()=>{
 // Their data loads when the layer is first shown.
 // - Webcams: all ARSO ones (public/webcams.json, made by scripts/webcams.mjs); a card's images load only when
 //   it opens, straight from ARSO.
-// - Snow: ARSO's 20 manned stations (Worker source 'snow'): snow depth, new snow and rain as small bar charts.
+// - Snow: ARSO's 20 manned stations (Worker source 'snow'): snow depth and new snow as small bar charts.
 // - Rivers: ARSO's gauges that measure flow (Worker source 'rivers'): the flow, with a dot for ARSO's rating.
 type Layer='wind'|'cameras'|'snow'|'rivers';
 interface Webcam {name:string;region:string;location:[number,number];page:string;images:{title:string;url:string}[]}
@@ -257,13 +259,12 @@ async function loadCameras() {
     openCard(marker,cam.name,`${arsoLink(cam.page)} · ${escape(cam.region)} · spletna kamera`,`<div class="grid gap-3 py-3">${images}</div>`);
   }));
 }
-// Each station is a small bar chart of its non-zero readings: snow depth, new snow and rain, each bar with its
+// Each station is a small bar chart of its non-zero readings: snow depth and new snow, each bar with its
 // value under it (unit in the title and card). Bar height grows with the square root of the value, full at the
 // cap, so small amounts still show. Stations with all readings 0 or missing are left out.
 const snowBars=[
   {key:'depth',title:'Snežna odeja',unit:'cm',cap:200,color:'bg-sky-300'},
   {key:'newSnow',title:'Novi sneg',unit:'cm',cap:50,color:'bg-sky-600'},
-  {key:'rain',title:'Padavine',unit:'mm',cap:50,color:'bg-blue-900'},
 ] as const;
 async function loadSnow() {
   const {data}=await source<SnowStation[]>('snow');
@@ -282,7 +283,7 @@ async function loadSnow() {
         return `<tr><th class="py-1 pr-3 text-left font-normal text-zinc-500"><span class="mr-1.5 inline-block size-2.5 rounded-sm ${bar.color}"></span>${bar.title}</th>
           <td class="py-1 font-semibold tabular-nums">${amount(reading,bar.unit)}</td><td class="py-1 pl-3 text-right text-xs text-zinc-500">${reading?date(reading.at):''}</td></tr>`;
       }).join('');
-      openCard(marker,station.name,`${arsoLink('https://meteo.arso.gov.si/met/sl/weather/observ/surface/snow/')} · padavine in sneg`,
+      openCard(marker,station.name,`${arsoLink('https://meteo.arso.gov.si/met/sl/weather/observ/surface/snow/')} · sneg`,
         `<div class="py-1"><table class="w-full text-sm"><tbody class="[&>tr]:border-b [&>tr]:border-zinc-100 [&>tr:last-child]:border-0">${rows}</tbody></table></div>`);
     });
   });
@@ -326,7 +327,7 @@ function hideStations() {
 async function showLayer() {
   const shown=layer;
   closePanel();hideStations();
-  $('time').classList.toggle('hidden!',layer!=='wind');
+  $('time').classList.toggle('hidden!',layer!=='wind');$('river-legend').hidden=layer!=='rivers';
   for(const [name,overlay] of Object.entries(overlays))if(name!==layer)for(const marker of overlay.markers)marker.remove();
   if(layer==='wind')return;
   const overlay=overlays[layer];
@@ -544,7 +545,7 @@ function renderResults() {
     :'<li class="px-3 py-2 text-zinc-500">Ni zadetkov.</li>';
   if(matches.length)search.setAttribute('aria-activedescendant',`search-${active}`);else search.removeAttribute('aria-activedescendant');
 }
-// Phones: the header's search button shows and hides the search box (desktop always shows it).
+// The header's search button shows and hides the search box.
 const searchToggle=$('search-toggle');
 function showSearch(open:boolean) {
   $('map-page').toggleAttribute('data-search',open);searchToggle.setAttribute('aria-expanded',String(open));
@@ -564,7 +565,7 @@ search.addEventListener('keydown',event=>{
     event.preventDefault();active=(active+(event.key==='ArrowDown'?1:-1)+matches.length)%matches.length;renderResults();
   } else if(event.key==='Enter'&&matches[active]) {event.preventDefault();pick(matches[active]);}
   else if(event.key==='Escape'&&search.value) {event.stopPropagation();search.value='';renderResults();}
-  else if(event.key==='Escape'&&!wide.matches) {showSearch(false);searchToggle.focus();}
+  else if(event.key==='Escape') {showSearch(false);searchToggle.focus();}
 });
 results.addEventListener('mousedown',event=>event.preventDefault()); // Keep focus so the click lands.
 results.addEventListener('click',event=>{
