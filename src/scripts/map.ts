@@ -1,4 +1,4 @@
-import { AttributionControl,Map as MapLibre,Marker,NavigationControl,Popup,setWorkerUrl,type StyleSpecification } from 'maplibre-gl';
+import { AttributionControl,Map as MapLibre,Marker,NavigationControl,setWorkerUrl,type StyleSpecification } from 'maplibre-gl';
 import { LogoControl } from '@maptoolkit/maplibre-logo-control';
 import '@maptoolkit/maplibre-logo-control/style.css';
 // MapLibre finds its worker next to its own module, which Vite moves; point it at the real file.
@@ -230,7 +230,7 @@ function openCard(marker:Marker,title:string,meta:string,body:string) {
   $('site-name').textContent=title;$('site-meta').innerHTML=meta;
   $('site-card').innerHTML=body;
   showContent('card');
-  placePanel(marker.getLngLat(),marker.getElement());
+  placePanel(marker.getLngLat());
   panel.focus({preventScroll:true});
 }
 // A marker whose look sits on a button inside it: the marker's own element is moved by the map (CSS
@@ -425,7 +425,7 @@ function openSite(id:string) {
   selected=station;
   showContent('wind');
   renderHeader();renderMarkers();
-  placePanel([station.location![1],station.location![0]],markers.get(id)?.getElement());
+  placePanel([station.location![1],station.location![0]]);
   void loadHistory();void loadRose();
   showThanks(station.source);
   const slug=slugs().get(id);
@@ -436,34 +436,24 @@ function openSite(id:string) {
 
 // ---- Panel ----
 // One panel (#site) for whatever was tapped: a wind station (#site-wind) or a webcam or snow station (#site-card).
-// Phones: a bottom sheet. Desktop: a bubble above the marker (a MapLibre popup holding the panel element; it goes
-// back to its place in the page when closed).
-const panel=$('site'),panelHome=$('map-page');
-const bubble=new Popup({maxWidth:'none',closeButton:false,closeOnClick:false,focusAfterOpen:false,
-  className:'z-10 [&_.maplibregl-popup-content]:rounded-xl! [&_.maplibregl-popup-content]:p-0! [&_.maplibregl-popup-content]:shadow-lg! [&_.maplibregl-popup-content]:ring-1 [&_.maplibregl-popup-content]:ring-black/5'});
-bubble.on('close',()=>closePanel());
-function showContent(kind:'wind'|'card') {
+// Phones: a bottom sheet. Desktop: a drawer on the right.
+const panel=$('site'),page=$('map-page');
+let kind:'wind'|'card'='wind';
+function showContent(next:'wind'|'card') {
+  kind=next;
   $('site-wind').hidden=kind!=='wind';$('site-card').hidden=kind!=='card';$('site-share').hidden=kind!=='wind';
-  // Wind graphs need the width; a webcam or snow card is narrower.
+  // Wind graphs need the width; a webcam or snow card is narrower (same widths as --drawer in index.astro).
   panel.classList.toggle('md:w-[560px]',kind==='wind');panel.classList.toggle('md:w-96',kind==='card');
 }
-function placePanel(at:[number,number]|{lng:number;lat:number},marker?:HTMLElement) {
+function placePanel(at:[number,number]|{lng:number;lat:number}) {
   setPanel(true);
-  const {clientWidth:width,clientHeight:height}=map.getContainer();
+  const {clientWidth:width,clientHeight:height}=map.getContainer(),point=map.project(at);
   if(wide.matches) {
-    // The map stays; the bubble opens on the side of the marker with more room (above or below; the header
-    // covers the top 56 px, the layer bar the bottom 90 px), shifted sideways near the edges, and is at most as
-    // tall as that room.
-    const point=map.project(at),offset=(marker?.offsetHeight??20)/2+4,half=panel.offsetWidth/2||280;
-    const above=point.y-offset-64,below=height-point.y-offset-96;
-    const side=point.x-half<8?'-left':point.x+half>width-8?'-right':'';
-    panel.style.maxHeight=`${Math.round(Math.min(Math.max(above,below),innerHeight*0.6))}px`;
-    bubble.options.anchor=`${above>=below?'bottom':'top'}${side}` as typeof bubble.options.anchor;
-    bubble.setOffset(offset).setLngLat(at);
-    if(!bubble.isOpen())bubble.setDOMContent(panel).addTo(map);
+    // The map stays, unless the marker is under the drawer: then it moves to the middle of the free part.
+    const free=width-panel.offsetWidth;
+    if(point.x>free-40)map.panBy([point.x-free/2,0]);
   } else {
     // Move the marker above the bottom sheet so it stays visible.
-    const point=map.project(at);
     map.panBy([point.x-width/2,point.y-height*0.15]);
   }
 }
@@ -472,9 +462,12 @@ function clearOpen() {
   if(selected){selected=null;++historyRequest;renderMarkers();showThanks(null);}
   ring(openMarker,false);openMarker=null;
 }
-// Open/close with a slide (up on phones) and fade; on desktop the bubble just appears.
-const closedPanel=['invisible','opacity-0','max-md:translate-y-full','md:hidden'];
-function setPanel(open:boolean) {for(const name of closedPanel)panel.classList.toggle(name,!open);}
+// Open/close with a slide (up on phones, from the right on desktop) and fade. data-drawer moves the map controls.
+const closedPanel=['invisible','opacity-0','max-md:translate-y-full','md:translate-x-full'];
+function setPanel(open:boolean) {
+  for(const name of closedPanel)panel.classList.toggle(name,!open);
+  if(open)page.dataset.drawer=kind;else delete page.dataset.drawer;
+}
 // Under the graph, thanks to the station's data source (its block in #site-thanks).
 function showThanks(source:Station['source']|null) {
   for(const block of $('site-thanks').querySelectorAll<HTMLElement>('[data-source]'))block.hidden=block.dataset.source!==source;
@@ -486,16 +479,14 @@ function closePanel(returnFocus=false) {
   if(!station&&!marker)return;
   clearOpen();
   setPanel(false);
-  // The bubble's close event calls this again; nothing is open by then.
-  if(bubble.isOpen()){bubble.remove();panelHome.appendChild(panel);panel.style.maxHeight='';}
   if(station)window.history.replaceState(null,'',location.pathname+location.search);
   if(returnFocus)(station?markers.get(station)?.getElement():marker&&markerButton(marker))?.focus({preventScroll:true});
 }
 // detail is 0 when the button is activated from the keyboard.
 $('site-close').addEventListener('click',event=>closePanel(event.detail===0));
-// Clicking or tapping empty map closes the panel (not a marker or the bubble; drags are not clicks).
+// Clicking or tapping empty map closes the panel (not a marker; drags are not clicks).
 map.on('click',event=>{
-  if(!(event.originalEvent.target as Element).closest('.maplibregl-marker,.maplibregl-popup'))closePanel();
+  if(!(event.originalEvent.target as Element).closest('.maplibregl-marker'))closePanel();
 });
 addEventListener('keydown',event=>{if(event.key==='Escape')closePanel(true);});
 // Reading under the pointer: the sample whose x position on the graph is nearest.
