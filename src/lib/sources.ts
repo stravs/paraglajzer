@@ -33,7 +33,7 @@ export function keepMissing(stations: Station[], previous: unknown, now = Date.n
     && (s.source === 'skytech' || (s.source === 'arso' ? arsoStations.includes(s.id.slice(5)) : s.location !== null && inGorenjska(s.location))))];
 }
 export function plain(s: string): string {
-  return s.replace(/<[^>]*>/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&deg;/g, '°').replace(/\s+/g, ' ').trim();
+  return s.replace(/<[^>]*>/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&deg;/g, '°').replace(/\s+/g, ' ').trim();
 }
 function number(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null;
@@ -212,6 +212,68 @@ export function parseArsoHistory(xml: string): WindSample[] {
   }
   return chronological(samples);
 }
+// ARSO "Padavine in višina snežne odeje": the 20 manned stations' rain, new snow and snow depth, one table per
+// observation time, newest first. Snow is mostly measured only at 07:00, so each value comes from the newest
+// table that has it, with its own time. Positions are from ARSO's station XML (observation_si_latest.xml).
+export const snowUrl = `${ARSO}/uploads/probase/www/observ/surface/text/sl/observation_si-snow_latest.html`;
+export const snowStations: Record<string, [number, number]> = {
+  'Bilje pri Novi Gorici': [45.8958, 13.6289], 'Celje': [46.2447, 15.2525], 'Črnomelj': [45.5603, 15.1508],
+  'Katarina nad Ljubljano': [46.0933, 14.3756], 'Kočevje': [45.6453, 14.8542], 'Kredarica': [46.3794, 13.8539],
+  'Letališče Cerklje ob Krki': [45.8936, 15.525], 'Letališče Edvarda Rusjana Maribor': [46.48, 15.6869],
+  'Letališče Jožeta Pučnika Ljubljana': [46.2178, 14.4775], 'Letališče Lesce': [46.37, 14.18], 'Letališče Portorož': [45.4756, 13.6206],
+  'Lisca': [46.0681, 15.2897], 'Ljubljana': [46.0658, 14.5172], 'Murska Sobota': [46.6525, 16.1961], 'Novo mesto': [45.8019, 15.1822],
+  'Postojna': [45.7664, 14.1975], 'Rateče': [46.4975, 13.7175], 'Slovenj Gradec': [46.49, 15.1161], 'Vogel': [46.2639, 13.8456], 'Vojsko': [46.0253, 13.9078],
+};
+// value in mm (rain) or cm (snow); hours: the period it covers (new snow and rain only); at: observation time.
+export interface Reading { value: number; hours?: number; at: string; }
+export interface SnowStation { name: string; location: [number, number]; rain: Reading | null; newSnow: Reading | null; depth: Reading | null; }
+export function parseSnow(html: string): SnowStation[] {
+  const byName = new Map<string, SnowStation>();
+  // Each table sits in a <div class="2026-11-06 18:00:00.0"> (UTC); newest first.
+  const tables = [...html.matchAll(/<div class="(\d{4}-\d\d-\d\d \d\d:\d\d):[\d.]+">([\s\S]*?)<\/table>/g)].sort((a, b) => b[1].localeCompare(a[1]));
+  for (const [, time, table] of tables) {
+    const at = new Date(`${time.replace(' ', 'T')}:00Z`).toISOString();
+    for (const [, row] of table.matchAll(/<tr>([\s\S]*?)<\/tr>/g)) {
+      const cells = [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map(m => plain(m[1]));
+      const location = snowStations[cells[0]];
+      if (cells.length !== 4 || !location) continue;
+      // "0.4 mm /12 h", "0 cm /12 h", "20 cm"; empty cells are "&nbsp;".
+      const reading = (cell: string): Reading | null => {
+        const m = cell.match(/^(\d+(?:[.,]\d+)?) (?:mm|cm)(?: \/(\d+) h)?$/);
+        return m ? { value: +m[1].replace(',', '.'), ...m[2] ? { hours: +m[2] } : {}, at } : null;
+      };
+      const station = byName.get(cells[0]) ?? { name: cells[0], location, rain: null, newSnow: null, depth: null };
+      station.rain ??= reading(cells[1]); station.newSnow ??= reading(cells[2]); station.depth ??= reading(cells[3]);
+      byName.set(cells[0], station);
+    }
+  }
+  if (!byName.size) throw new Error('Snow table missing');
+  return [...byName.values()];
+}
+// ARSO river gauges (hidro_podatki_zadnji.xml, every 30 min): only those that measure flow. ARSO rates each flow
+// ("mali pretok", "običajni pretok" …) and gives the flows of its three flood warning levels.
+export const riverUrl = 'https://www.arso.gov.si/xml/vode/hidro_podatki_zadnji.xml';
+export interface RiverStation {
+  id: string; river: string; place: string; location: [number, number]; observedAt: string | null;
+  flow: number; rating: string; level: number | null; temperature: number | null; floodFlows: number[];
+}
+export function parseRivers(xml: string): RiverStation[] {
+  const stations = [...xml.matchAll(/<postaja\s([^>]*)>([\s\S]*?)<\/postaja>/g)].flatMap(([, attributes, body]): RiverStation[] => {
+    const attribute = (name: string) => attributes.match(new RegExp(`${name}="([^"]*)"`))?.[1] ?? '';
+    const flow = number(tag(body, 'pretok')), location = coordinates({ lat: attribute('wgs84_sirina'), lon: attribute('wgs84_dolzina') });
+    if (flow === null || !location) return [];
+    // datum_cet is Ljubljana winter time all year.
+    const time = Date.parse(`${tag(body, 'datum_cet').replace(' ', 'T')}:00+01:00`);
+    return [{
+      id: attribute('sifra'), river: plain(tag(body, 'reka')), place: plain(tag(body, 'merilno_mesto')), location,
+      observedAt: Number.isFinite(time) ? new Date(time).toISOString() : null, flow, rating: plain(tag(body, 'pretok_znacilni')).replace(/^!!.*/, ''),
+      level: number(tag(body, 'vodostaj')), temperature: number(tag(body, 'temp_vode')),
+      floodFlows: ['prvi', 'drugi', 'tretji'].map(n => number(tag(body, `${n}_vv_pretok`))).filter(n => n !== null),
+    }];
+  });
+  if (!stations.length) throw new Error('River data missing');
+  return stations;
+}
 // Luftar (Tržič paragliding club) stations: one JSON file each, about 6 h of 10-minute readings,
 // timestamps in Ljubljana wall-clock time without an offset. Positions are approximate.
 export const luftarStations = {
@@ -296,6 +358,8 @@ export function sourceFor(key: string, anchor?: string): Source | null {
   if (key === 'vetr') return { url:'https://vetr.si/', interval:600, stations:true, parse:body => gorenjska(parseVetr(body)), next:nextVetrCheck };
   if (key === 'skytech') return { url:'https://skytech.si/skytechsys/data.php', interval:600, init:{method:'POST', body:'c=tabela', headers:{'Content-Type':'application/x-www-form-urlencoded'}}, stations:true, parse:parseSkytech };
   if (key === 'aviation') return { url:`${ARSO}/uploads/probase/www/aviation/fproduct/text/sl/aviation.txt`, interval:600, parse:body => body.replace(/\^/g,'Č').replace(/~/g,'č').replace(/\[/g,'Š').replace(/\{/g,'š').replace(/@/g,'Ž').replace(/`/g,'ž') };
+  if (key === 'snow') return { url:snowUrl, interval:1800, parse:parseSnow };
+  if (key === 'rivers') return { url:riverUrl, interval:1800, parse:parseRivers };
   if (key === 'sounding') return { url:`${ARSO}/uploads/probase/www/observ/upper/sigps_ljubljana-bezigrad_zoom.png`, interval:1800, image:true };
   const [type,id] = key.split(':');
   if (type==='thermal' && key===`thermal:${id}` && Object.hasOwn(thermalRegions,id)) return { url:`${ARSO}/uploads/probase/www/aviation/RSS/termika${id}.xml`, interval:600, parse:parseThermals };

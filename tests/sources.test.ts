@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { inGorenjska } from '../src/lib/gorenjska.ts';
-import { parseVetr, parseSkytech, parseFrames, parseThermals, parseArso, parseArsoHistory, parseLuftarHistory, keepMissing, nextVetrCheck, arsoStations, ljubljanaTime, clockSkew, sourceFor } from '../src/lib/sources.ts';
+import { parseVetr, parseSkytech, parseFrames, parseThermals, parseArso, parseArsoHistory, parseLuftarHistory, keepMissing, nextVetrCheck, arsoStations, ljubljanaTime, clockSkew, sourceFor, parseSnow, parseRivers } from '../src/lib/sources.ts';
 
 test('vetr exposes only normalized weather, not device credentials',()=>{
   const data=[{station:{active:true,name:'test',full_name:'Test',imsi:'secret'},prefsData:{prefs:{send_data_interval_min:'20',phoneNum:'secret'}},windData:{avg:0,max:2,dir:0,timestamp:'2026-10-26T12:00:00+01:00'}}];
@@ -157,4 +157,22 @@ test('vetr raw readings: 10 min before the last one, gust is the top reading, di
   // 11 parts at 30° against 1 part at 350°: a bit below 30°.
   assert.ok(raw.direction!>20&&raw.direction!<30,String(raw.direction));
   assert.throws(()=>parseVetrRaw('{}'));
+});
+test('ARSO snow table: each value from the newest observation that has it',()=>{
+  const row=(name:string,rain:string,snow:string,depth:string)=>`<tr><td class="meteoSI-th">${name}</td><td>${rain}</td><td>${snow}</td><td>${depth}</td></tr>`;
+  const table=(time:string,rows:string)=>`<div class="${time}:00.0"><table class="meteoSI-table"><thead><tr><th>Petek</th><th>Padavine</th><th>Sneg</th><th>Odeja</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const html=table('2026-11-06 06:00',row('Kredarica','1,5 mm /24 h','4 cm /24 h','23 cm')+row('Rateče','0 mm /24 h','0 cm /24 h','0 cm'))
+    +table('2026-11-06 18:00',row('Kredarica','0.4 mm /12 h','&nbsp;','20 cm')+row('Nowhere','1 mm /12 h','&nbsp;','&nbsp;'));
+  const [kredarica,ratece]=parseSnow(html);
+  assert.deepEqual(kredarica,{name:'Kredarica',location:[46.3794,13.8539],rain:{value:0.4,hours:12,at:'2026-11-06T18:00:00.000Z'},
+    newSnow:{value:4,hours:24,at:'2026-11-06T06:00:00.000Z'},depth:{value:20,at:'2026-11-06T18:00:00.000Z'}});
+  assert.equal(ratece.depth?.value,0);
+  assert.equal(parseSnow(html).length,2);
+  assert.throws(()=>parseSnow('<html>changed</html>'));
+});
+test('ARSO river gauges: only those with a flow, with its rating and flood levels',()=>{
+  const station=(id:string,flow:string)=>`<postaja  sifra="${id}"  wgs84_dolzina="14.5"  wgs84_sirina="46.1"  kota_0="200" ><reka>Ku&#x010D;nica</reka><merilno_mesto>Cankova</merilno_mesto><datum>2026-07-06 22:00</datum><datum_cet>2026-07-06 21:00</datum_cet><vodostaj>54</vodostaj>${flow}<prvi_vv_pretok>600.0</prvi_vv_pretok><drugi_vv_pretok>905.0</drugi_vv_pretok><tretji_vv_pretok>1180.0</tretji_vv_pretok><pretok_znacilni>mali pretok</pretok_znacilni><temp_vode>9.7</temp_vode></postaja>`;
+  const rivers=parseRivers(`<arsopodatki>${station('1100','<pretok>43.4</pretok>')}${station('1200','')}</arsopodatki>`);
+  assert.deepEqual(rivers,[{id:'1100',river:'Kučnica',place:'Cankova',location:[46.1,14.5],observedAt:'2026-07-06T20:00:00.000Z',flow:43.4,rating:'mali pretok',level:54,temperature:9.7,floodFlows:[600,905,1180]}]);
+  assert.throws(()=>parseRivers('<html>changed</html>'));
 });

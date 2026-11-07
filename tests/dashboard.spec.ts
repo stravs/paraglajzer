@@ -97,6 +97,114 @@ test('Zemljevid: search finds a site without diacritics and opens it',async({pag
   await expect(page.locator('#search-results')).toContainText('Ni zadetkov.');
   await page.getByRole('link',{name:'Napoved',exact:true}).click();await expect(page).toHaveURL(/\/napoved\//);
 });
+test('Zemljevid: wind layer is the default; with webcams on, wind markers hide and a camera on a station can be tapped; images load only when opened',async({page})=>{
+  await page.setViewportSize({width:390,height:844});
+  const errors:string[]=[],requests:string[]=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  page.on('request',request=>requests.push(request.url()));
+  // Start zoomed in on Krvavec, where the ARSO camera and wind station share a spot.
+  const cam=JSON.parse(readFileSync('public/webcams.json','utf8')).find((cam:{name:string})=>cam.name==='Krvavec');
+  await page.addInitScript(([lat,lon])=>{if(!localStorage.getItem('mapView'))localStorage.setItem('mapView',JSON.stringify({center:[lon,lat],zoom:12}));},cam.location);
+  await page.goto(base);
+  await expect(page.locator('.maplibregl-marker[title^="Krvavec"]')).toBeVisible({timeout:45000});
+  const button=page.getByRole('button',{name:'Spletne kamere'});
+  await expect(button).toHaveAttribute('aria-pressed','false');
+  await page.waitForTimeout(1000);
+  expect(requests.filter(url=>url.endsWith('/webcams.json'))).toHaveLength(0);
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed','true');
+  await expect(page.locator('.maplibregl-marker[title^="Krvavec"]')).toBeHidden();
+  expect(requests.filter(url=>url.includes('KRVAVEC_dir'))).toHaveLength(0);
+  // A real click: it fails if the station's arrow or label covers the camera.
+  await page.getByRole('button',{name:'Spletna kamera: Krvavec'}).click();
+  // Phones: it opens in the bottom sheet, not a bubble.
+  const card=page.locator('#site');
+  await expect(card.locator('#site-name')).toHaveText('Krvavec');
+  await expect(page.locator('.maplibregl-popup')).toHaveCount(0);
+  await expect(card.locator('#site-card img')).toHaveCount(cam.images.length);
+  await expect(card.locator('#site-wind')).toBeHidden();
+  expect(requests.some(url=>url.includes('KRVAVEC_dir'))).toBe(true);
+  await page.locator('#site-close').click();
+  await expect(card).toBeHidden();
+  // Back to wind: stations take taps again; then cameras on again for the reload check.
+  await page.getByRole('button',{name:'Veter',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Veter',exact:true})).toHaveAttribute('aria-pressed','true');
+  await expect(button).toHaveAttribute('aria-pressed','false');
+  await expect(page.getByRole('button',{name:'Spletna kamera: Krvavec'})).toHaveCount(0);
+  await expect(page.locator('.maplibregl-marker[title^="Krvavec"]')).toBeVisible();
+  await button.click();
+  // The choice survives a reload.
+  await page.reload();
+  await expect(page.getByRole('button',{name:'Spletne kamere'})).toHaveAttribute('aria-pressed','true');
+  expect(errors).toEqual([]);
+});
+test('Zemljevid: snow layer shows non-zero ARSO stations as bar charts; on desktop a tap opens a bubble, for wind stations too',async({page})=>{
+  const errors:string[]=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  // Fixed readings: live ones are often all 0.
+  const at='2026-11-06T06:00:00.000Z',now=Date.now();
+  const data=[
+    {name:'Kredarica',location:[46.3794,13.8539],depth:{value:120,at},newSnow:{value:15,hours:24,at},rain:{value:8,hours:24,at}},
+    {name:'Ljubljana',location:[46.0658,14.5172],depth:{value:0,at},newSnow:{value:0,hours:12,at},rain:{value:0,hours:12,at}},
+    {name:'Vogel',location:[46.2639,13.8456],depth:null,newSnow:null,rain:{value:3,hours:12,at}},
+  ];
+  await page.route('**/api/source?key=snow',route=>route.fulfill({json:{data,fetchedAt:now,checkedAt:now,nextCheck:now+1800000,error:null}}));
+  await page.goto(base);
+  await expect(page.locator('.maplibregl-marker[title^="Krvavec"]')).toBeAttached({timeout:45000});
+  const button=page.getByRole('button',{name:'Padavine in sneg'});
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed','true');
+  const kredarica=page.getByRole('button',{name:/^Kredarica · snežna odeja 120 cm/});
+  await expect(kredarica).toBeVisible();
+  await expect(page.locator('.maplibregl-marker[title^="Krvavec"]')).toBeHidden();
+  await expect(kredarica.locator('[style*="height"]')).toHaveCount(3);
+  await expect(page.getByRole('button',{name:/^Vogel · /}).locator('[style*="height"]')).toHaveCount(1);
+  await expect(page.getByRole('button',{name:/^Ljubljana · /})).toHaveCount(0);
+  // Desktop: it opens in a bubble above the marker.
+  await kredarica.click();
+  const bubble=page.locator('.maplibregl-popup');
+  await expect(bubble.locator('#site-name')).toHaveText('Kredarica');
+  await expect(bubble.locator('#site-card tr')).toHaveCount(3);
+  await expect(bubble).toContainText('15 cm/24 h');
+  await page.keyboard.press('Escape');
+  await expect(bubble).toHaveCount(0);
+  await expect(page.locator('#site')).toBeHidden();
+  await page.getByRole('button',{name:'Veter',exact:true}).click();
+  await expect(kredarica).toHaveCount(0);
+  // A wind station opens in the bubble too.
+  await page.locator('.maplibregl-marker[title^="Krvavec"]').first().dispatchEvent('click');
+  await expect(bubble.locator('#site-name')).toContainText('Krvavec');
+  await expect(bubble.locator('#site-wind')).toBeVisible();
+  await page.locator('#site-close').click();
+  await expect(bubble).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+test('Zemljevid: rivers layer shows ARSO flows with a rating dot; tapping one opens its readings',async({page})=>{
+  await page.setViewportSize({width:390,height:844});
+  const errors:string[]=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  const now=Date.now();
+  const data=[
+    {id:'3060',river:'Sava',place:'Litija',location:[46.0566,14.8226],observedAt:new Date(now).toISOString(),flow:612,rating:'velik pretok',level:250,temperature:8.1,floodFlows:[600,900,1200]},
+    {id:'3200',river:'Sora',place:'Suha',location:[46.15,14.32],observedAt:new Date(now).toISOString(),flow:0.35,rating:'mali pretok',level:40,temperature:null,floodFlows:[]},
+  ];
+  await page.route('**/api/source?key=rivers',route=>route.fulfill({json:{data,fetchedAt:now,checkedAt:now,nextCheck:now+1800000,error:null}}));
+  await page.addInitScript(()=>localStorage.setItem('mapView',JSON.stringify({center:[14.6,46.08],zoom:8.5})));
+  await page.goto(base);
+  await expect(page.locator('.maplibregl-marker[title^="Krvavec"]')).toBeAttached({timeout:45000});
+  await page.getByRole('button',{name:'Pretoki rek'}).click();
+  const litija=page.getByRole('button',{name:/^Sava · Litija · pretok 612 m³\/s/});
+  await expect(litija).toBeVisible();
+  await expect(litija.locator('.bg-red-600')).toHaveCount(1);
+  await expect(page.getByRole('button',{name:/^Sora · Suha · pretok 0.35 m³\/s/}).locator('.bg-amber-400')).toHaveCount(1);
+  await litija.click();
+  await expect(page.locator('#site-name')).toHaveText('Sava · Litija');
+  await expect(page.locator('#site-card tr')).toHaveCount(4);
+  await expect(page.locator('#site-card')).toContainText('600 / 900 / 1200 m³/s');
+  await page.locator('#site-close').click();
+  await expect(page.locator('#site')).toBeHidden();
+  expect(errors).toEqual([]);
+});
 test('Skytech site opens with its own history',async({page})=>{
   await page.goto(base);
   const site=page.locator('.maplibregl-marker[title^="Potoška gora"]');

@@ -1,9 +1,9 @@
-import { Map as MapLibre,Marker,NavigationControl,setWorkerUrl,type StyleSpecification } from 'maplibre-gl';
+import { Map as MapLibre,Marker,NavigationControl,Popup,setWorkerUrl,type StyleSpecification } from 'maplibre-gl';
 import { LogoControl } from '@maptoolkit/maplibre-logo-control';
 import '@maptoolkit/maplibre-logo-control/style.css';
 // MapLibre finds its worker next to its own module, which Vite moves; point it at the real file.
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
-import type { Station } from '../lib/sources';
+import type { Station,SnowStation,Reading,RiverStation } from '../lib/sources';
 import type { WindSample } from '../lib/history';
 import { stationSpots } from '../lib/station-spots';
 import { $,escape,date,freshness,read,save,source,sourceLabel,startPolling,type Snapshot } from './weather';
@@ -161,6 +161,7 @@ function renderMarkers() {
     element.style.zIndex=String(4+rank);labelElement.style.zIndex=String(1+rank);
     element.setAttribute('title',label(shown));element.setAttribute('aria-label',label(shown));
   }
+  hideStations();
 }
 
 // ---- Time slider ----
@@ -202,6 +203,168 @@ play.addEventListener('click',async()=>{
   playing=window.setInterval(()=>{const next=Number(slider.value)+10;setTime(next>=0?0:next);if(next>=0)stop();},500);
   await loadTrail();setTime(-trailHours*60);
 });
+
+// ---- Layers: wind, webcams, snow ----
+// The map has four layers: wind (default), webcams, snow and rivers; buttons pick the active one and the choice is
+// remembered. Only the active layer is shown: with another one active, the wind markers and the time slider hide.
+// Webcam and snow markers are buttons like the station labels; tapping one opens it in the panel (see "Panel").
+// Their data loads when the layer is first shown.
+// - Webcams: all ARSO ones (public/webcams.json, made by scripts/webcams.mjs); a card's images load only when
+//   it opens, straight from ARSO.
+// - Snow: ARSO's 20 manned stations (Worker source 'snow'): snow depth, new snow and rain as small bar charts.
+// - Rivers: ARSO's gauges that measure flow (Worker source 'rivers'): the flow, with a dot for ARSO's rating.
+type Layer='wind'|'cameras'|'snow'|'rivers';
+interface Webcam {name:string;region:string;location:[number,number];page:string;images:{title:string;url:string}[]}
+// Wind: a windsock on its pole. Webcam: round lens on a stand. Snow: a snowflake.
+const windPath='<path d="M4 21V3M4 4l17 3.5v3L4 12M9.5 5.1v5.8M15 6.3v3.4"/>';
+const cameraPath='<circle cx="12" cy="10" r="7"/><circle cx="12" cy="10" r="2.5"/><path d="M9 16.5 7 21h10l-2-4.5"/>';
+const riverPath='<path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>';
+const snowPath='<path d="M2 12h20M12 2v20M20 16l-4-4 4-4M4 8l4 4-4 4M16 4l-4 4-4-4M8 20l4-4 4 4"/>';
+let layer=read<Layer>('layer','wind'),openMarker:Marker|null=null;
+// The open marker gets a blue ring, like a selected station's label.
+const markerButton=(marker:Marker)=>marker.getElement().firstElementChild as HTMLButtonElement;
+function ring(marker:Marker|null,on:boolean) {
+  marker&&markerButton(marker).classList.toggle('ring-2',on);marker&&markerButton(marker).classList.toggle('ring-blue-600',on);
+}
+// A webcam or snow station in the panel: title, a small meta line (HTML) and a body (HTML).
+function openCard(marker:Marker,title:string,meta:string,body:string) {
+  clearOpen();
+  openMarker=marker;ring(marker,true);
+  $('site-name').textContent=title;$('site-meta').innerHTML=meta;
+  $('site-card').innerHTML=body;
+  showContent('card');
+  placePanel(marker.getLngLat(),marker.getElement());
+  panel.focus({preventScroll:true});
+}
+// A marker whose look sits on a button inside it: the marker's own element is moved by the map (CSS
+// transform). Above the wind markers (z-index 1–6), below the card.
+function overlayMarker([lat,lon]:[number,number],className:string,html:string,name:string,onClick:(marker:Marker)=>void) {
+  const element=document.createElement('div');element.style.zIndex='7';
+  element.innerHTML=`<button type="button" class="cursor-pointer bg-white/95 shadow-sm ring-1 ring-black/10 transition hover:scale-110 ${className}">${html}</button>`;
+  const button=element.firstElementChild as HTMLButtonElement;
+  button.setAttribute('aria-label',name);button.title=name;
+  const marker=new Marker({element}).setLngLat([lon,lat]);
+  button.addEventListener('click',event=>{event.stopPropagation();onClick(marker);});
+  return marker;
+}
+const arsoLink=(url:string)=>`<a href="${escape(url)}" target="_blank" rel="noopener noreferrer" class="underline">ARSO</a>`;
+async function loadCameras() {
+  const list=await (await fetch('/webcams.json')).json() as Webcam[];
+  const icon=`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${cameraPath}</svg>`;
+  return list.map(cam=>overlayMarker(cam.location,'grid size-7 place-items-center rounded-full text-zinc-700 hover:text-black',icon,`Spletna kamera: ${cam.name}`,marker=>{
+    // Bust browser caches once a minute so a reopened card shows a fresh image.
+    const minute=Math.floor(Date.now()/60000);
+    const images=cam.images.map(image=>{
+      const url=`${image.url}?t=${minute}`;
+      return `<figure><a href="${escape(url)}" target="_blank" rel="noopener noreferrer" class="block"><img src="${escape(url)}" alt="${escape(`${cam.name} · ${image.title}`)}" loading="lazy" class="aspect-video w-full rounded bg-zinc-100 object-cover"></a>
+        <figcaption class="mt-1 text-xs text-zinc-500">${escape(image.title)}</figcaption></figure>`;
+    }).join('');
+    openCard(marker,cam.name,`${arsoLink(cam.page)} · ${escape(cam.region)} · spletna kamera`,`<div class="grid gap-3 py-3">${images}</div>`);
+  }));
+}
+// Each station is a small bar chart of its non-zero readings: snow depth, new snow and rain, each bar with its
+// value under it (unit in the title and card). Bar height grows with the square root of the value, full at the
+// cap, so small amounts still show. Stations with all readings 0 or missing are left out.
+const snowBars=[
+  {key:'depth',title:'Snežna odeja',unit:'cm',cap:200,color:'bg-sky-300'},
+  {key:'newSnow',title:'Novi sneg',unit:'cm',cap:50,color:'bg-sky-600'},
+  {key:'rain',title:'Padavine',unit:'mm',cap:50,color:'bg-blue-900'},
+] as const;
+async function loadSnow() {
+  const {data}=await source<SnowStation[]>('snow');
+  if(!data)throw new Error('Snow unavailable');
+  const amount=(reading:Reading|null,unit:string)=>reading?`${reading.value} ${unit}${reading.hours?`/${reading.hours} h`:''}`:'—';
+  return data.filter(station=>snowBars.some(bar=>station[bar.key]?.value)).map(station=>{
+    const bars=snowBars.filter(bar=>station[bar.key]?.value).map(bar=>{
+      const {value}=station[bar.key]!,height=Math.max(4,Math.round(48*Math.sqrt(Math.min(value,bar.cap)/bar.cap)));
+      return `<span class="flex flex-col items-center gap-0.5"><span class="w-4 rounded-t-sm ${bar.color}" style="height:${height}px"></span>
+        <span class="text-xs leading-4 font-semibold tabular-nums">${value}</span></span>`;
+    }).join('');
+    const name=`${station.name} · ${snowBars.map(bar=>`${bar.title.toLowerCase()} ${amount(station[bar.key],bar.unit)}`).join(' · ')}`;
+    return overlayMarker(station.location,'flex items-end gap-1.5 rounded-md px-1.5 pt-1.5 pb-0.5 text-zinc-900',bars,name,marker=>{
+      const rows=snowBars.map(bar=>{
+        const reading=station[bar.key];
+        return `<tr><th class="py-1 pr-3 text-left font-normal text-zinc-500"><span class="mr-1.5 inline-block size-2.5 rounded-sm ${bar.color}"></span>${bar.title}</th>
+          <td class="py-1 font-semibold tabular-nums">${amount(reading,bar.unit)}</td><td class="py-1 pl-3 text-right text-xs text-zinc-500">${reading?date(reading.at):''}</td></tr>`;
+      }).join('');
+      openCard(marker,station.name,`${arsoLink('https://meteo.arso.gov.si/met/sl/weather/observ/surface/snow/')} · padavine in sneg`,
+        `<div class="py-1"><table class="w-full text-sm"><tbody class="[&>tr]:border-b [&>tr]:border-zinc-100 [&>tr:last-child]:border-0">${rows}</tbody></table></div>`);
+    });
+  });
+}
+// River flow in m³/s: small flows with more decimals. The dot: amber low, blue normal, dark blue high, red at or
+// above ARSO's first flood warning level, grey unrated.
+const flowText=(n:number)=>n<1?String(+n.toFixed(2)):n<10?n.toFixed(1):String(Math.round(n));
+function flowColor({flow,rating,floodFlows}:RiverStation) {
+  if(floodFlows.length&&flow>=floodFlows[0])return 'bg-red-600';
+  return /mal/.test(rating)?'bg-amber-400':/velik|visok/.test(rating)?'bg-blue-800':rating?'bg-sky-500':'bg-zinc-400';
+}
+async function loadRivers() {
+  const {data}=await source<RiverStation[]>('rivers');
+  if(!data)throw new Error('Rivers unavailable');
+  const unit=(value:number|null,text:string)=>value===null?'—':`${value} ${text}`;
+  return data.map(station=>{
+    const color=flowColor(station),flow=`${flowText(station.flow)} m³/s`;
+    const label=`<span class="size-2 shrink-0 rounded-full ${color}"></span>${flowText(station.flow)}`;
+    const name=`${station.river} · ${station.place} · pretok ${flow}${station.rating?` · ${station.rating}`:''}`;
+    return overlayMarker(station.location,'flex items-center gap-1 rounded-full px-1.5 text-xs leading-5 font-semibold tabular-nums whitespace-nowrap text-zinc-900',label,name,marker=>{
+      const row=(title:string,value:string,note='')=>`<tr><th class="py-1 pr-3 text-left font-normal text-zinc-500">${title}</th>
+        <td class="py-1 font-semibold tabular-nums">${value}</td><td class="py-1 pl-3 text-right text-xs text-zinc-500">${escape(note)}</td></tr>`;
+      openCard(marker,`${station.river} · ${station.place}`,`${arsoLink('https://www.arso.gov.si/vode/podatki/amp/')} · vodomerna postaja · ${station.observedAt?escape(date(station.observedAt)):''}`,
+        `<div class="py-1"><table class="w-full text-sm"><tbody class="[&>tr]:border-b [&>tr]:border-zinc-100 [&>tr:last-child]:border-0">
+          ${row('Pretok',`<span class="mr-1.5 inline-block size-2.5 rounded-full ${color}"></span>${flow}`,station.rating)}
+          ${row('Vodostaj',unit(station.level,'cm'))}${row('Temperatura vode',unit(station.temperature,'°C'))}
+          ${station.floodFlows.length?row('Opozorilni pretoki',`${station.floodFlows.map(flowText).join(' / ')} m³/s`,'1. / 2. / 3. stopnja'):''}</tbody></table></div>`);
+    });
+  });
+}
+// Each extra layer's markers, loaded once on first show.
+const overlays:Record<Exclude<Layer,'wind'>,{load:()=>Promise<Marker[]>;task?:Promise<Marker[]>|null;markers:Marker[];error:string}>={
+  cameras:{load:loadCameras,markers:[],error:'Spletne kamere niso dosegljive'},
+  snow:{load:loadSnow,markers:[],error:'Podatki o snegu niso dosegljivi'},
+  rivers:{load:loadRivers,markers:[],error:'Pretoki rek niso dosegljivi'},
+};
+// Wind markers show only on the wind layer.
+function hideStations() {
+  for(const marker of [...markers.values(),...labels.values()])marker.getElement().hidden=layer!=='wind';
+}
+async function showLayer() {
+  const shown=layer;
+  closePanel();hideStations();
+  $('time').classList.toggle('invisible',layer!=='wind');
+  for(const [name,overlay] of Object.entries(overlays))if(name!==layer)for(const marker of overlay.markers)marker.remove();
+  if(layer==='wind')return;
+  const overlay=overlays[layer];
+  try {overlay.markers=await (overlay.task??=overlay.load());}
+  catch {overlay.task=null;$('map-status').textContent=overlay.error;return;}
+  // Unless another layer was picked meanwhile.
+  if(layer===shown)for(const marker of overlay.markers)marker.addTo(map);
+}
+// The layer buttons: on the right edge halfway down on phones (index.astro; the bottom has the search bar),
+// bottom right on desktop.
+const layerButtons=document.createElement('div');
+layerButtons.className='maplibregl-ctrl maplibregl-ctrl-group';
+const layers:{id:Layer;name:string;path:string}[]=[{id:'wind',name:'Veter',path:windPath},{id:'cameras',name:'Spletne kamere',path:cameraPath},{id:'snow',name:'Padavine in sneg',path:snowPath},{id:'rivers',name:'Pretoki rek',path:riverPath}];
+layerButtons.innerHTML=layers.map(({name,path})=>`<button type="button" title="${name}" aria-label="${name}">
+  <svg viewBox="0 0 24 24" width="24" height="24" class="mx-auto" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg></button>`).join('');
+const buttons=[...layerButtons.querySelectorAll('button')];
+const mark=()=>buttons.forEach((button,i)=>{
+  const on=layers[i].id===layer;
+  button.setAttribute('aria-pressed',String(on));
+  button.classList.toggle('text-blue-600',on);button.classList.toggle('text-zinc-500',!on);
+});
+mark();
+buttons.forEach((button,i)=>button.addEventListener('click',()=>{
+  if(layers[i].id===layer)return;
+  layer=layers[i].id;save('layer',layer);
+  if(layer!=='wind'){stop();setTime(0);}
+  mark();void showLayer();
+}));
+const layerControl={onAdd:()=>layerButtons,onRemove:()=>layerButtons.remove()};
+const wide=matchMedia('(min-width: 768px)');
+const placeLayerButtons=()=>{if(map.hasControl(layerControl))map.removeControl(layerControl);map.addControl(layerControl,wide.matches?'bottom-right':'top-right');};
+placeLayerButtons();wide.addEventListener('change',placeLayerButtons);
+void showLayer();
 
 // ---- Site panel ----
 let history:Snapshot<WindSample[]>|null=null;
@@ -275,44 +438,82 @@ function openSite(id:string) {
   const station=stations.find(s=>s.id===id);
   if(!station)return;
   if(selected?.id!==id){history=null;selectedTime=null;$('site-rose').hidden=true;}
+  clearOpen();
   selected=station;
-  setPanel(true);
+  showContent('wind');
   renderHeader();renderMarkers();
-  // Desktop: the map stays as it is. Phones: move the marker above the bottom sheet so it stays visible.
-  if(!matchMedia('(min-width: 768px)').matches) {
-    const {clientWidth:width,clientHeight:height}=map.getContainer();
-    const point=map.project([station.location![1],station.location![0]]);
-    map.panBy([point.x-width/2,point.y-height*0.15]);
-  }
+  placePanel([station.location![1],station.location![0]],markers.get(id)?.getElement());
   void loadHistory();void loadRose();
   showThanks(station.source);
   const slug=slugs().get(id);
   if(slug)window.history.replaceState(null,'',`#${slug}`);
   // Focus the panel itself (no highlighted button); Tab then reaches the close button.
-  $('site').focus({preventScroll:true});
+  panel.focus({preventScroll:true});
 }
-// Open/close with a slide (up on phones, in from the right on desktop) and fade.
-const closedPanel=['invisible','opacity-0','max-md:translate-y-full','md:translate-x-8'];
-function setPanel(open:boolean) {for(const name of closedPanel)$('site').classList.toggle(name,!open);}
+
+// ---- Panel ----
+// One panel (#site) for whatever was tapped: a wind station (#site-wind) or a webcam or snow station (#site-card).
+// Phones: a bottom sheet. Desktop: a bubble above the marker (a MapLibre popup holding the panel element; it goes
+// back to its place in the page when closed).
+const panel=$('site'),panelHome=$('map-page');
+const bubble=new Popup({maxWidth:'none',closeButton:false,closeOnClick:false,focusAfterOpen:false,
+  className:'z-10 [&_.maplibregl-popup-content]:rounded-lg! [&_.maplibregl-popup-content]:p-0! [&_.maplibregl-popup-content]:shadow-lg! [&_.maplibregl-popup-content]:ring-1 [&_.maplibregl-popup-content]:ring-black/5'});
+bubble.on('close',()=>closePanel());
+function showContent(kind:'wind'|'card') {
+  $('site-wind').hidden=kind!=='wind';$('site-card').hidden=kind!=='card';$('site-share').hidden=kind!=='wind';
+  // Wind graphs need the width; a webcam or snow card is narrower.
+  panel.classList.toggle('md:w-[560px]',kind==='wind');panel.classList.toggle('md:w-96',kind==='card');
+}
+function placePanel(at:[number,number]|{lng:number;lat:number},marker?:HTMLElement) {
+  setPanel(true);
+  const {clientWidth:width,clientHeight:height}=map.getContainer();
+  if(wide.matches) {
+    // The map stays; the bubble opens on the side of the marker with more room (above or below; the header
+    // covers the top 48 px), shifted sideways near the edges, and is at most as tall as that room.
+    const point=map.project(at),offset=(marker?.offsetHeight??20)/2+4,half=panel.offsetWidth/2||280;
+    const above=point.y-offset-56,below=height-point.y-offset-8;
+    const side=point.x-half<8?'-left':point.x+half>width-8?'-right':'';
+    panel.style.maxHeight=`${Math.round(Math.min(Math.max(above,below),innerHeight*0.6))}px`;
+    bubble.options.anchor=`${above>=below?'bottom':'top'}${side}` as typeof bubble.options.anchor;
+    bubble.setOffset(offset).setLngLat(at);
+    if(!bubble.isOpen())bubble.setDOMContent(panel).addTo(map);
+  } else {
+    // Move the marker above the bottom sheet so it stays visible.
+    const point=map.project(at);
+    map.panBy([point.x-width/2,point.y-height*0.15]);
+  }
+}
+// What is open (station or card) is closed, but the panel stays: something else opens in it next.
+function clearOpen() {
+  if(selected){selected=null;++historyRequest;renderMarkers();showThanks(null);}
+  ring(openMarker,false);openMarker=null;
+}
+// Open/close with a slide (up on phones) and fade; on desktop the bubble just appears.
+const closedPanel=['invisible','opacity-0','max-md:translate-y-full','md:hidden'];
+function setPanel(open:boolean) {for(const name of closedPanel)panel.classList.toggle(name,!open);}
 // Under the graph, thanks to the station's data source (its block in #site-thanks).
 function showThanks(source:Station['source']|null) {
   for(const block of $('site-thanks').querySelectorAll<HTMLElement>('[data-source]'))block.hidden=block.dataset.source!==source;
 }
-// returnFocus: when closed from the keyboard, put focus back on the station's marker.
-function closeSite(returnFocus=false) {
-  const id=selected?.id;
-  selected=null;++historyRequest;
-  setPanel(false);renderMarkers();showThanks(null);
-  window.history.replaceState(null,'',location.pathname+location.search);
-  if(id&&returnFocus)markers.get(id)?.getElement()?.focus({preventScroll:true});
+// returnFocus: when closed from the keyboard, put focus back on the marker.
+function closePanel(returnFocus=false) {
+  const station=selected?.id,marker=openMarker;
+  // Nothing open (also at start-up, before the panel's state below exists).
+  if(!station&&!marker)return;
+  clearOpen();
+  setPanel(false);
+  // The bubble's close event calls this again; nothing is open by then.
+  if(bubble.isOpen()){bubble.remove();panelHome.appendChild(panel);panel.style.maxHeight='';}
+  if(station)window.history.replaceState(null,'',location.pathname+location.search);
+  if(returnFocus)(station?markers.get(station)?.getElement():marker&&markerButton(marker))?.focus({preventScroll:true});
 }
 // detail is 0 when the button is activated from the keyboard.
-$('site-close').addEventListener('click',event=>closeSite(event.detail===0));
-// Clicking or tapping empty map closes the panel (not a station; drags are not clicks).
+$('site-close').addEventListener('click',event=>closePanel(event.detail===0));
+// Clicking or tapping empty map closes the panel (not a marker or the bubble; drags are not clicks).
 map.on('click',event=>{
-  if(selected&&!(event.originalEvent.target as Element).closest('.maplibregl-marker'))closeSite();
+  if(!(event.originalEvent.target as Element).closest('.maplibregl-marker,.maplibregl-popup'))closePanel();
 });
-addEventListener('keydown',event=>{if(event.key==='Escape'&&selected)closeSite(true);});
+addEventListener('keydown',event=>{if(event.key==='Escape')closePanel(true);});
 // Reading under the pointer: the sample whose x position on the graph is nearest.
 function sampleAt(clientX:number):number {
   const chart=document.querySelector<SVGSVGElement>('#site-charts svg[data-chart]');
