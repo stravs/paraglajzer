@@ -1,20 +1,43 @@
 ---
 import '../styles/global.css';
 import Header from '../components/Header.astro';
-interface Props { page:'Zemljevid' | 'Napoved' | 'Vetr.si'; full?:boolean; }
-const { page,full=false }=Astro.props;
+interface Props {
+  page:'Zemljevid' | 'Napoved' | 'Vetr.si' | 'Ni strani'; full?:boolean;
+  // Browser tab and search result title; default "<page> · Agregator".
+  title?:string; description?:string;
+  // Pages search engines should leave out (also kept out of the sitemap in astro.config.mjs).
+  noindex?:boolean;
+}
+const { page,full=false,title=`${page} · Agregator`,description='Agregator · vremenska mreža za outdoor: veter v živo, spletne kamere, sneg in pretoki rek v Sloveniji.',noindex=false }=Astro.props;
+// Absolute URLs on the production origin (site in astro.config.mjs).
+const canonical=new URL(Astro.url.pathname,Astro.site);
+const image=new URL('/og.png',Astro.site);
 ---
 <!doctype html>
 <html lang="sl">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    {noindex?<meta name="robots" content="noindex" />:<link rel="canonical" href={canonical} />}
     <meta name="theme-color" content="#1a3d2e" />
-    <meta name="description" content="Agregator · vremenska mreža za outdoor: veter, kamere, sneg in reke v Sloveniji." />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <title>{page} · Agregator</title>
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <!-- Link previews (Facebook, Messenger, Slack, X …). -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Agregator" />
+    <meta property="og:locale" content="sl_SI" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={image} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Agregator · vremenska mreža za outdoor" />
+    <meta name="twitter:card" content="summary_large_image" />
     <slot name="head" />
   </head>
   <body class="bg-white font-sans text-sm text-zinc-900 antialiased">

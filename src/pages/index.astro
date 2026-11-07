@@ -3,6 +3,9 @@ export const prerender=true;
 import 'maplibre-gl/dist/maplibre-gl.css';
 import Layout from '../layouts/Layout.astro';
 import Header from '../components/Header.astro';
+const description='Zemljevid vetra v živo s postaj vetr.si, Skytech, ARSO in Luftar, s spletnimi kamerami, snegom in pretoki rek v Sloveniji.';
+// What the site is, for search engines (schema.org).
+const website={'@context':'https://schema.org','@type':'WebSite',name:'Agregator',url:Astro.site?.href,inLanguage:'sl',description};
 // Map layers (map.ts, "Layers"). Icons: a windsock on its pole, a round lens on a stand, a snowflake, waves.
 const layers=[
   {id:'wind',name:'Veter',title:'Veter',path:'<path d="M4 21V3M4 4l17 3.5v3L4 12M9.5 5.1v5.8M15 6.3v3.4"/>'},
@@ -11,10 +14,11 @@ const layers=[
   {id:'rivers',name:'Reke',title:'Pretoki rek',path:'<path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>'},
 ];
 ---
-<Layout page="Zemljevid" full>
+<Layout page="Zemljevid" full title="Agregator · veter v živo, kamere, sneg in reke" description={description}>
   <!-- Start the basemap downloads while the page script still loads: fetch the style now and open the
        connections to the tile, font and icon servers (crossorigin, as MapLibre fetches them with CORS). -->
   <Fragment slot="head">
+    <script type="application/ld+json" set:html={JSON.stringify(website)} />
     <link rel="preload" href="https://styles.maptoolkit.org/hiking.json" as="fetch" crossorigin />
     <link rel="preconnect" href="https://tiles.maptoolkit.org" crossorigin />
     <link rel="preconnect" href="https://tiles.mapterhorn.com" crossorigin />

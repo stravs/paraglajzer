@@ -1,0 +1,20 @@
+# Agregator
+
+> Agregator (https://agregator.app/) is a free, non-commercial weather map for outdoor sports in Slovenia, made mainly for paragliding pilots. It shows live readings from weather stations run by others in one place, credits and links each source, and is not an official flight briefing.
+
+The site is in Slovenian. Readings load in the browser after the page opens, so the HTML holds no weather values. For current values, use the original sources listed below.
+
+## Pages
+
+- [Zemljevid (map)](https://agregator.app/): live wind (average, gusts, direction) from vetr.si, Skytech, ARSO and Luftar stations, with wind graphs per station and up to 3 hours of past readings. Other layers: ARSO webcams, snow depth and new snow (ARSO), and river flows (ARSO).
+- [Napoved (forecast)](https://agregator.app/napoved/): ARSO thermal forecast and ALADIN charts by region, the Ljubljana sounding, Zaladin ALADIN maps, the ARSO aviation text forecast and the precipitation radar.
+
+## Sources
+
+- [ARSO meteo](https://meteo.arso.gov.si/): Slovenian Environment Agency; stations, webcams, snow, forecasts, radar
+- [ARSO water data](https://www.arso.gov.si/vode/podatki/amp/): river flows
+- [vetr.si](https://vetr.si/): paragliding wind stations
+- [Skytech](https://skytech.si/): weather stations
+- [Luftar](https://www.luftar.si/): KJP Luftar wind stations
+- [Zaladin](https://zaladin.razor.si/): ALADIN forecast maps
+- Map: Maptoolkit, © OpenStreetMap contributors

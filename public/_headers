@@ -1,0 +1,11 @@
+# Static files (pages, icons, logos). Worker responses (/api/, /vetr/) set their own headers in src/worker.ts.
+# The adapter adds long caching for the fingerprinted /_astro/* files on build.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+
+# Source logos rarely change; not fingerprinted, so a day rather than forever.
+/logos/*
+  Cache-Control: public, max-age=86400

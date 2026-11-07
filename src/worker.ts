@@ -177,13 +177,15 @@ export default {
   async fetch(request,env,ctx) {
     const url=new URL(request.url);
     if ((url.pathname==='/vetr' || url.pathname.startsWith('/vetr/')) && !vetrAllowed(request, env.VETR_PASSWORD))
-      return new Response('Geslo je napačno.', {status:401, headers:{'WWW-Authenticate':'Basic realm="Paraglajzer", charset="UTF-8"', 'Cache-Control':'no-store'}});
+      return new Response('Geslo je napačno.', {status:401, headers:{'WWW-Authenticate':'Basic realm="Paraglajzer", charset="UTF-8"', 'Cache-Control':'no-store', 'X-Robots-Tag':'noindex'}});
     if (url.pathname==='/api/source') {
       const key=url.searchParams.get('key') || '';
       if (key!=='stations' && key!=='trail' && !sourceFor(key)) return new Response('Unknown source',{status:404});
-      if (request.method!=='GET') return new Response('Method not allowed',{status:405,headers:{Allow:'GET'}});
+      if (request.method!=='GET' && request.method!=='HEAD') return new Response('Method not allowed',{status:405,headers:{Allow:'GET, HEAD'}});
       const stub=env.SOURCES.get(env.SOURCES.idFromName('shared-v1'));
-      return stub.fetch(`https://cache.internal/?key=${encodeURIComponent(key)}`);
+      const response=await stub.fetch(`https://cache.internal/?key=${encodeURIComponent(key)}`);
+      // HEAD: the same headers as GET, without the body.
+      return request.method==='HEAD' ? new Response(null,response) : response;
     }
     return handle(request,env,ctx);
   },
