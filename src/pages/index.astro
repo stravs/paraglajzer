@@ -27,13 +27,13 @@ const layers=[
   <Header page="Zemljevid" class="absolute inset-x-0 top-0 z-[700] shadow-md">
     <button id="search-toggle" type="button" aria-expanded="false" aria-controls="search-box" class="grid size-10 place-items-center rounded-lg text-white/90 hover:bg-white/10 hover:text-white md:hidden" aria-label="Išči postajo" title="Išči postajo"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button>
   </Header>
-  <!-- Phones, from the bottom edge up: the Maptoolkit logo and the map credit (0–33 px), the time slider once shown
-       (40–84 px), then the zoom buttons and the layer column side by side, both ending 8 px above whatever is
-       below: 92 px with the slider, 42 px without (a gap above the credit lifts the zoom buttons). On desktop the
-       slider and layer bar are in the middle, clear of the corners. Control buttons are 44 px (finger size)
+  <!-- Phones, from the bottom edge up: the Maptoolkit logo and the map credit (0–33 px); then the time slider
+       (40–84 px, once shown) with the zoom buttons right of it (40–128 px; a gap above the credit lifts them); the
+       layer column above the zoom buttons (from 136 px). On desktop the slider and layer bar are in the middle,
+       clear of the corners. Control buttons are 44 px (finger size)
        instead of MapLibre's 29 px, with bigger icons. The markers' z-indexes stay inside their own container
        (isolate), so arrows never draw over the map controls. -->
-  <div class="absolute inset-0 z-0"><div id="map" class="h-full w-full [&_.maplibregl-canvas-container]:isolate max-md:[&_.maplibregl-ctrl-attrib]:mt-3! max-md:group-has-[#time:not([hidden])]:[&_.maplibregl-ctrl-attrib]:mt-[62px]! [&_.maplibregl-ctrl-group_button]:size-11! [&_.maplibregl-ctrl-group]:rounded-xl! [&_.maplibregl-ctrl-zoom-in_.maplibregl-ctrl-icon]:bg-[length:36px]! [&_.maplibregl-ctrl-zoom-out_.maplibregl-ctrl-icon]:bg-[length:36px]!" role="application" aria-label="Zemljevid postaj"></div></div>
+  <div class="absolute inset-0 z-0"><div id="map" class="h-full w-full [&_.maplibregl-canvas-container]:isolate max-md:[&_.maplibregl-ctrl-attrib]:mt-[10px]! [&_.maplibregl-ctrl-group_button]:size-11! [&_.maplibregl-ctrl-group]:rounded-xl! [&_.maplibregl-ctrl-zoom-in_.maplibregl-ctrl-icon]:bg-[length:36px]! [&_.maplibregl-ctrl-zoom-out_.maplibregl-ctrl-icon]:bg-[length:36px]!" role="application" aria-label="Zemljevid postaj"></div></div>
   <!-- Search box with its results below. -->
   <div id="search-box" class="absolute inset-x-2 top-16 z-[650] flex flex-col gap-1 max-md:hidden max-md:group-data-[search]:flex md:right-auto md:w-80">
     <div class="flex rounded-xl bg-white shadow-md">
@@ -43,7 +43,7 @@ const layers=[
     <ul id="search-results" role="listbox" aria-label="Zadetki" hidden class="max-h-[50dvh] overflow-y-auto rounded-xl bg-white py-1 shadow-md md:max-h-80"></ul>
   </div>
   <!-- Bottom: status and the time slider; on desktop above the layer bar. -->
-  <div class="absolute inset-x-2 bottom-10 z-[600] mx-auto flex max-w-md flex-col gap-2 md:bottom-24">
+  <div class="absolute inset-x-2 bottom-10 z-[600] mx-auto flex max-w-md flex-col gap-2 max-md:right-[62px] md:bottom-24">
     <p id="map-status" role="status" class="mx-auto w-fit rounded bg-white/90 px-2 py-1 text-xs text-zinc-600 empty:hidden">Nalaganje…</p>
     <!-- Time slider: arrows at an earlier time (the last few hours); hidden until there is history. See "Time slider" in map.ts. -->
     <div id="time" hidden class="flex items-center gap-1 rounded-xl bg-white pr-3 shadow-md">
@@ -52,11 +52,11 @@ const layers=[
       <output id="time-label" for="time-slider" class="w-24 shrink-0 text-right text-xs text-zinc-600 tabular-nums">zdaj</output>
     </div>
   </div>
-  <!-- Layer bar: one layer at a time (map.ts, "Layers"). Phones: a column bottom left, level with the zoom buttons.
-       Desktop: a row at the bottom, in the middle. -->
-  <nav id="layers" aria-label="Sloji" class="absolute left-2 z-[600] flex w-16 flex-col gap-1 rounded-2xl bg-white p-1.5 shadow-lg max-md:bottom-[42px] max-md:group-has-[#time:not([hidden])]:bottom-[92px] md:bottom-6 md:left-1/2 md:w-full md:max-w-md md:-translate-x-1/2 md:flex-row">
-    {layers.map(({id,name,title,path})=><button type="button" data-layer={id} aria-pressed="false" title={title} class="flex flex-1 flex-col items-center gap-0.5 rounded-xl py-2 text-xs md:py-1.5 font-medium text-zinc-600 hover:text-zinc-900 aria-pressed:bg-brand aria-pressed:text-white">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={path}></svg>{name}</button>)}
+  <!-- Layer bar: one layer at a time (map.ts, "Layers"). Phones: icons only, in a column above the zoom buttons,
+       in the same 44 px box style. Desktop: a row with names at the bottom, in the middle. -->
+  <nav id="layers" aria-label="Sloji" class="absolute z-[600] flex bg-white max-md:right-[10px] max-md:bottom-[136px] max-md:w-11 max-md:flex-col max-md:divide-y max-md:divide-zinc-200 max-md:overflow-hidden max-md:rounded-xl max-md:ring-2 max-md:ring-black/10 md:bottom-6 md:left-1/2 md:w-full md:max-w-md md:-translate-x-1/2 md:gap-1 md:rounded-2xl md:p-1.5 md:shadow-lg">
+    {layers.map(({id,name,title,path})=><button type="button" data-layer={id} aria-pressed="false" title={title} class="flex size-11 items-center justify-center text-xs font-medium text-zinc-600 hover:text-zinc-900 aria-pressed:bg-brand aria-pressed:text-white md:h-auto md:w-auto md:flex-1 md:flex-col md:gap-0.5 md:rounded-xl md:py-1.5">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={path}></svg><span class="max-md:sr-only">{name}</span></button>)}
   </nav>
   <!-- Panel for whatever was tapped (a station, webcam or snow station): bottom sheet on phones (slides up); on
        desktop map.ts moves it into a bubble above the marker. Closed = invisible, faded and moved off (phones) or

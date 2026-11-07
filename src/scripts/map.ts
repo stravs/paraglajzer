@@ -319,9 +319,9 @@ const overlays:Record<Exclude<Layer,'wind'>,{load:()=>Promise<Marker[]>;task?:Pr
   snow:{load:loadSnow,markers:[],error:'Podatki o snegu niso dosegljivi'},
   rivers:{load:loadRivers,markers:[],error:'Pretoki rek niso dosegljivi'},
 };
-// Wind markers show only on the wind layer.
+// Wind markers, and the spinning arrows while they load, show only on the wind layer.
 function hideStations() {
-  for(const marker of [...markers.values(),...labels.values()])marker.getElement().hidden=layer!=='wind';
+  for(const marker of [...markers.values(),...labels.values(),...placeholders])marker.getElement().hidden=layer!=='wind';
 }
 async function showLayer() {
   const shown=layer;
