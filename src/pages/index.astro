@@ -3,6 +3,12 @@ export const prerender=true;
 import 'maplibre-gl/dist/maplibre-gl.css';
 import Layout from '../layouts/Layout.astro';
 import Header from '../components/Header.astro';
+// Logos via ?url: fingerprinted files in /_astro/, so browsers cache them for a year.
+import skytechLogo from '../assets/logos/skytech.png?url';
+import skytechGlare from '../assets/logos/skytech-glare.png?url';
+import kokLogo from '../assets/logos/kok.png?url';
+import arsoLogo from '../assets/logos/arso-meteo.svg?url';
+import luftarLogo from '../assets/logos/luftar.svg?url';
 const description='Zemljevid vetra v živo s postaj vetr.si, Skytech, ARSO in Luftar, s spletnimi kamerami, snegom in pretoki rek v Sloveniji.';
 // What the site is, for search engines (schema.org).
 const website={'@context':'https://schema.org','@type':'WebSite',name:'Agregator',url:Astro.site?.href,inLanguage:'sl',description};
@@ -100,15 +106,15 @@ const layers=[
         <h3 class="mb-2 text-xs text-zinc-500">Podatki od:</h3>
         <div class="grid grid-cols-2 gap-2">
           <!-- skytech.si header: white wordmark on its blue sky gradient with clouds. -->
-          <a href="https://skytech.si/" target="_blank" rel="noopener" class="flex h-24 items-center justify-center rounded bg-[image:url(/logos/skytech-glare.png),linear-gradient(to_bottom,#0670C6,#088BF7_60%,#52AEFA)] bg-cover bg-no-repeat hover:brightness-110"><img src="/logos/skytech.png" alt="Skytech vremenske postaje" width="300" height="150" class="h-24 w-auto"></a>
+          <a href="https://skytech.si/" target="_blank" rel="noopener" class="flex h-24 items-center justify-center rounded bg-[image:var(--glare),linear-gradient(to_bottom,#0670C6,#088BF7_60%,#52AEFA)] bg-cover bg-no-repeat hover:brightness-110" style={`--glare:url(${skytechGlare})`}><img src={skytechLogo} alt="Skytech vremenske postaje" width="300" height="150" class="h-24 w-auto"></a>
           <!-- KOK makes the Skytech stations and runs skytech.si ("Upravitelj spletne strani"); its banner from there. -->
-          <a href="https://www.kok.si/" target="_blank" rel="noopener" class="flex h-24 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-white hover:opacity-90"><img src="/logos/kok.png" alt="KOK, proizvodnja elektronskih naprav" width="300" height="108" class="h-auto max-h-full w-full object-contain"></a>
+          <a href="https://www.kok.si/" target="_blank" rel="noopener" class="flex h-24 items-center justify-center overflow-hidden rounded border border-zinc-200 bg-white hover:opacity-90"><img src={kokLogo} alt="KOK, proizvodnja elektronskih naprav" width="300" height="108" class="h-auto max-h-full w-full object-contain"></a>
         </div>
       </div>
       <div data-source="arso" hidden>
         <h3 class="mb-2 text-xs text-zinc-500">Podatki od:</h3>
         <!-- As in the ARSO METEO header bar. -->
-        <a href="https://meteo.arso.gov.si/" target="_blank" rel="noopener" class="flex h-16 items-center justify-center rounded bg-[#509ab8] hover:bg-[#6eacc4]"><img src="/logos/arso-meteo.svg" alt="ARSO meteo" class="h-6"></a>
+        <a href="https://meteo.arso.gov.si/" target="_blank" rel="noopener" class="flex h-16 items-center justify-center rounded bg-[#509ab8] hover:bg-[#6eacc4]"><img src={arsoLogo} alt="ARSO meteo" class="h-6"></a>
       </div>
       <div data-source="vetr" hidden>
         <h3 class="mb-2 text-xs text-zinc-500">Podatki od:</h3>
@@ -126,7 +132,7 @@ const layers=[
       </div>
       <div data-source="luftar" hidden>
         <h3 class="mb-2 text-xs text-zinc-500">Podatki od:</h3>
-        <a href="https://www.luftar.si/" target="_blank" rel="noopener" class="block overflow-hidden rounded hover:opacity-90"><img src="/logos/luftar.svg" alt="KJP Luftar" width="980" height="400" class="h-auto w-full"></a>
+        <a href="https://www.luftar.si/" target="_blank" rel="noopener" class="block overflow-hidden rounded hover:opacity-90"><img src={luftarLogo} alt="KJP Luftar" width="980" height="400" class="h-auto w-full"></a>
       </div>
     </section>
     </div>

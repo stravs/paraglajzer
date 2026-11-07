@@ -17,6 +17,8 @@ export default defineConfig({
   devToolbar: { enabled: false },
   session: false,
   output: 'server',
+  // CSS goes into the page itself: no stylesheet requests hold up the first render.
+  build: { inlineStylesheets: 'always' },
 
   vite: {
     plugins: [tailwindcss()],

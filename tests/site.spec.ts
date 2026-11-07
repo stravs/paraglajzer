@@ -30,14 +30,13 @@ test('the map page describes the site for search engines',async({request})=>{
   const data=JSON.parse(html.match(/<script type="application\/ld\+json">(.*?)<\/script>/)![1]);
   expect(data).toMatchObject({'@type':'WebSite',name:'Agregator',url:`${origin}/`,inLanguage:'sl'});
 });
-test('static files: security headers; caching only for fingerprinted files and logos',async({request})=>{
+test('static files: security headers; caching only for fingerprinted files',async({request})=>{
   const page=await request.get(`${base}/`);
   expect(page.headers()['x-content-type-options']).toBe('nosniff');
   expect(page.headers()['referrer-policy']).toBe('strict-origin-when-cross-origin');
   expect(page.headers()['cache-control']).not.toContain('immutable');
-  const asset=(await page.text()).match(/\/_astro\/[^"]+\.css/)![0];
+  const asset=(await page.text()).match(/\/_astro\/kok\.[^"]+\.png/)![0];
   expect((await request.get(`${base}${asset}`)).headers()['cache-control']).toContain('immutable');
-  expect((await request.get(`${base}/logos/kok.png`)).headers()['cache-control']).toBe('public, max-age=86400');
   for(const file of ['/og.png','/llms.txt','/manifest.webmanifest','/apple-touch-icon.png'])expect((await request.get(`${base}${file}`)).status()).toBe(200);
 });
 test('pages without a trailing slash redirect to it',async({request})=>{

@@ -35,14 +35,19 @@ export class SourceCache extends DurableObject<Env> {
     if (await this.ctx.storage.getAlarm() === null) await this.ctx.storage.setAlarm(Date.now() + 86400000);
     const key = new URL(request.url).searchParams.get('key') || '';
     // All station listings in one request; each provider is still checked on its own schedule.
+    // Cron (scheduled below): wait for the due providers, so the map's history has no gaps.
+    if (key === 'refresh') {
+      await Promise.all(stationKeys.map(k => this.cached(k, sourceFor(k)!)));
+      return new Response(null, {status:204});
+    }
     if (key === 'stations') {
-      const entries = await Promise.all(stationKeys.map(k => this.cached(k, sourceFor(k)!)));
+      const entries = await this.listings();
       const nextCheck = Math.min(...entries.map(entry => entry.nextCheck));
       return Response.json({sources:Object.fromEntries(stationKeys.map((k, i) => [k, view(entries[i])])), nextCheck}, {headers:cacheUntil(nextCheck)});
     }
     // Recent readings of all stations (see lib/trail.ts), due with the listings.
     if (key === 'trail') {
-      const entries = await Promise.all(stationKeys.map(k => this.cached(k, sourceFor(k)!)));
+      const entries = await this.listings();
       const nextCheck = Math.min(...entries.map(entry => entry.nextCheck));
       let data: Trail;
       if (__FAKE_DATA__) data = fakeTrail(entries.flatMap(entry => Array.isArray(entry.data) ? entry.data as Station[] : []));
@@ -99,6 +104,18 @@ export class SourceCache extends DurableObject<Env> {
       }});
     }
     return Response.json(view(entry), {headers:cacheUntil(entry.nextCheck)});
+  }
+  // Pages get the stored listings at once; due providers are checked in the background (Skytech takes
+  // 4–10 s), so a page load never waits on one. A listing being checked says nextCheck in 15 s, so the page
+  // asks again once the check is likely done. Only the very first load, with nothing stored, waits.
+  private listings(): Promise<Snapshot[]> {
+    return Promise.all(stationKeys.map(async k => {
+      const previous = await this.ctx.storage.get<Snapshot>(k);
+      if (!previous) return this.cached(k, sourceFor(k)!);
+      if (Date.now() < previous.nextCheck) return previous;
+      this.ctx.waitUntil(this.cached(k, sourceFor(k)!));
+      return {...previous, nextCheck: Date.now() + 15000};
+    }));
   }
   // Concurrent requests for a source share one in-flight check.
   private cached(key: string, source: Source, force = false): Promise<Snapshot> {
@@ -192,6 +209,6 @@ export default {
   // Every 10 min (wrangler.jsonc): check the station listings, so the map's history has no gaps while nobody
   // has the app open. Providers are still asked only when each listing is due.
   async scheduled(_controller,env) {
-    await env.SOURCES.get(env.SOURCES.idFromName('shared-v1')).fetch('https://cache.internal/?key=stations');
+    await env.SOURCES.get(env.SOURCES.idFromName('shared-v1')).fetch('https://cache.internal/?key=refresh');
   },
 } satisfies ExportedHandler<Env>;
