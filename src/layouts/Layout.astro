@@ -1,28 +1,25 @@
 ---
 import '../styles/global.css';
+import Header from '../components/Header.astro';
 interface Props { page:'Zemljevid' | 'Napoved' | 'Vetr.si'; full?:boolean; }
 const { page,full=false }=Astro.props;
-const pages={Zemljevid:'/',Napoved:'/napoved/'} as const;
 ---
 <!doctype html>
 <html lang="sl">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#ffffff" />
+    <meta name="theme-color" content="#1a3d2e" />
+    <meta name="description" content="Agregator · vremenska mreža za outdoor: veter, kamere, sneg in reke v Sloveniji." />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <title>{page} · Paraglajzer</title>
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>{page} · Agregator</title>
     <slot name="head" />
   </head>
   <body class="bg-white font-sans text-sm text-zinc-900 antialiased">
     <a href="#content" class="sr-only focus:not-sr-only">Preskoči na podatke</a>
-    {!full&&<header class="sticky top-0 z-10 border-b border-zinc-200 bg-white">
-      <div class="mx-auto flex h-12 max-w-5xl items-center gap-3 px-3 sm:px-5">
-        <nav class="flex h-full gap-4 sm:gap-6" aria-label="Strani">
-          {(Object.keys(pages) as (keyof typeof pages)[]).map(name=><a href={pages[name]} aria-current={page===name?'page':undefined} class:list={['flex items-center border-b-2 px-1 font-medium',page===name?'border-zinc-900':'border-transparent text-zinc-500 hover:text-zinc-900']}>{name}</a>)}
-        </nav>
-      </div>
-    </header>}
+    {!full&&<Header page={page} class="sticky top-0 z-10" />}
     <main id="content" class:list={[full?'relative h-dvh':'mx-auto max-w-5xl px-3 py-4 sm:px-5']}><h1 class="sr-only">{page}</h1><slot /></main>
     <!-- Cloudflare Web Analytics -->
     <script is:inline type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "f37f333137984b38b7ef5080b9fc97b1"}'></script>

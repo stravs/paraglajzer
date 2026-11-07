@@ -10,7 +10,7 @@ import { layers } from '../lib/sources';
   <div class="max-md:flex max-md:flex-col">
   <section id="regional-charts" aria-label="Jadralci" class="max-md:contents">
     <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-      <select id="chart-region" aria-label="Regija" class="min-h-10 max-w-full border border-zinc-300 bg-white px-2">{Object.entries(chartRegions).map(([id,name])=><option value={id}>{name}</option>)}</select>
+      <select id="chart-region" aria-label="Regija" class="min-h-10 max-w-full rounded-lg border border-zinc-300 bg-white px-2">{Object.entries(chartRegions).map(([id,name])=><option value={id}>{name}</option>)}</select>
       <span id="regional-meta" class="text-xs text-zinc-500" role="status"></span>
     </div>
     <!-- ARSO thermal forecast for the chosen region, above the charts; days side by side. -->
@@ -33,7 +33,7 @@ import { layers } from '../lib/sources';
     </div>
   </section>
   <section id="forecast" class="mt-6 border-t border-zinc-200 pt-4 max-md:order-1" aria-labelledby="forecast-title">
-    <div class="mb-2 flex items-center justify-between gap-2"><h2 id="forecast-title" class="font-medium">ALADIN · Zaladin</h2><select id="layer" aria-label="Sloj napovedi" class="min-h-10 max-w-[65%] border border-zinc-300 bg-white px-2">{Object.entries(layers).map(([id,name])=><option value={id} selected={id==='2'}>{name}</option>)}</select></div>
+    <div class="mb-2 flex items-center justify-between gap-2"><h2 id="forecast-title" class="font-medium">ALADIN · Zaladin</h2><select id="layer" aria-label="Sloj napovedi" class="min-h-10 max-w-[65%] rounded-lg border border-zinc-300 bg-white px-2">{Object.entries(layers).map(([id,name])=><option value={id} selected={id==='2'}>{name}</option>)}</select></div>
     <p id="map-placeholder" class="py-6 text-zinc-500">Nalaganje…</p>
     <!-- Frame viewer: the slider below, or a horizontal swipe on touch screens (vertical scroll still works). -->
     <div id="forecast-viewer" class="relative mx-auto max-w-[740px] touch-pan-y">
@@ -41,7 +41,7 @@ import { layers } from '../lib/sources';
     </div>
     <div class="mx-auto max-w-[740px]">
       <p class="mt-2 flex flex-wrap items-baseline justify-between gap-x-2"><span id="map-time" class="text-base font-semibold"></span><span id="map-position" class="text-xs text-zinc-500"></span></p>
-      <input id="forecast-step" type="range" min="0" max="0" value="0" disabled aria-label="Čas napovedi" class="mt-1 min-h-10 w-full accent-zinc-700" />
+      <input id="forecast-step" type="range" min="0" max="0" value="0" disabled aria-label="Čas napovedi" class="mt-1 min-h-10 w-full accent-brand" />
       <p id="map-run" class="text-xs text-zinc-500"></p>
       <p id="map-meta" class="text-xs text-amber-700 empty:hidden"></p>
     </div>

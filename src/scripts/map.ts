@@ -61,8 +61,6 @@ const map=new MapLibre({
   transformStyle:(_previous,next)=>trimStyle(next),
 });
 map.touchZoomRotate.disableRotation();map.keyboard.disableRotation();
-// On phones the header bar hides on the first move by the user (drag, zoom, keys); moves from code don't count.
-map.on('movestart',event=>{if(event.originalEvent)$('map-page').removeAttribute('data-header');});
 map.on('moveend',()=>{
   const {lng,lat}=map.getCenter();
   save('mapView',{center:[+lng.toFixed(5),+lat.toFixed(5)],zoom:+map.getZoom().toFixed(2)});
@@ -84,7 +82,7 @@ const markers=new Map<string,Marker>(),labels=new Map<string,Marker>();
 // (green up to 4 m/s, yellow to 7, orange to 10, red above): the inner arrow shows the average, the outer one the
 // gusts. A thin dark edge keeps every colour visible on light and green map areas. Its label is a white pill just below: average bold, gusts
 // lighter. Arrows and labels keep one size at every zoom.
-// Stale stations are half transparent (solid on hover); the selected one gets a blue ring. Without a
+// Stale stations are half transparent (solid on hover); the selected one gets a green ring. Without a
 // direction, a dot replaces the arrow.
 // Drawn in three layers: the whole arrow in the `outer` (gusts) colour, a smaller inner arrow in the `inner`
 // (average) colour, both with the same thin dark edge. A sharp, narrow dart with a deep notch.
@@ -106,7 +104,7 @@ function icon(station:Station) {
   const fade=stale&&!isSelected?'opacity-50 hover:opacity-100':'';
   const arrow=`<svg viewBox="-18 -18 36 36" width="${size}" height="${size}" class="block overflow-visible drop-shadow-[0_1px_2px_rgb(0_0_0/0.35)] transition hover:scale-110 ${fade}">${shape}</svg>`;
   const text=`${speed(station.avg)}${station.gust===null?'':`<span class="font-normal text-zinc-500"> / ${speed(station.gust)}</span>`}`;
-  const label=`<span class="block rounded-full bg-white/95 font-semibold tabular-nums text-zinc-900 shadow-sm transition ${fade} ${isSelected?'ring-2 ring-blue-600':'ring-1 ring-black/10'} px-1.5 text-[11px] leading-4">${text}</span>`;
+  const label=`<span class="block rounded-full bg-white/95 font-semibold tabular-nums text-zinc-900 shadow-sm transition ${fade} ${isSelected?'ring-2 ring-brand':'ring-1 ring-black/10'} px-1.5 text-[11px] leading-4">${text}</span>`;
   // The label hangs from the station point, 2 px below the arrow.
   return {arrow,label,labelTop:size/2+2};
 }
@@ -215,16 +213,13 @@ play.addEventListener('click',async()=>{
 // - Rivers: ARSO's gauges that measure flow (Worker source 'rivers'): the flow, with a dot for ARSO's rating.
 type Layer='wind'|'cameras'|'snow'|'rivers';
 interface Webcam {name:string;region:string;location:[number,number];page:string;images:{title:string;url:string}[]}
-// Wind: a windsock on its pole. Webcam: round lens on a stand. Snow: a snowflake.
-const windPath='<path d="M4 21V3M4 4l17 3.5v3L4 12M9.5 5.1v5.8M15 6.3v3.4"/>';
+// Webcam marker: a round lens on a stand.
 const cameraPath='<circle cx="12" cy="10" r="7"/><circle cx="12" cy="10" r="2.5"/><path d="M9 16.5 7 21h10l-2-4.5"/>';
-const riverPath='<path d="M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"/>';
-const snowPath='<path d="M2 12h20M12 2v20M20 16l-4-4 4-4M4 8l4 4-4 4M16 4l-4 4-4-4M8 20l4-4 4 4"/>';
 let layer=read<Layer>('layer','wind'),openMarker:Marker|null=null;
-// The open marker gets a blue ring, like a selected station's label.
+// The open marker gets a green ring, like a selected station's label.
 const markerButton=(marker:Marker)=>marker.getElement().firstElementChild as HTMLButtonElement;
 function ring(marker:Marker|null,on:boolean) {
-  marker&&markerButton(marker).classList.toggle('ring-2',on);marker&&markerButton(marker).classList.toggle('ring-blue-600',on);
+  marker&&markerButton(marker).classList.toggle('ring-2',on);marker&&markerButton(marker).classList.toggle('ring-brand',on);
 }
 // A webcam or snow station in the panel: title, a small meta line (HTML) and a body (HTML).
 function openCard(marker:Marker,title:string,meta:string,body:string) {
@@ -331,7 +326,7 @@ function hideStations() {
 async function showLayer() {
   const shown=layer;
   closePanel();hideStations();
-  $('time').classList.toggle('invisible',layer!=='wind');
+  $('time').classList.toggle('hidden!',layer!=='wind');
   for(const [name,overlay] of Object.entries(overlays))if(name!==layer)for(const marker of overlay.markers)marker.remove();
   if(layer==='wind')return;
   const overlay=overlays[layer];
@@ -340,30 +335,17 @@ async function showLayer() {
   // Unless another layer was picked meanwhile.
   if(layer===shown)for(const marker of overlay.markers)marker.addTo(map);
 }
-// The layer buttons: on the right edge halfway down on phones (index.astro; the bottom has the search bar),
-// bottom right on desktop.
-const layerButtons=document.createElement('div');
-layerButtons.className='maplibregl-ctrl maplibregl-ctrl-group';
-const layers:{id:Layer;name:string;path:string}[]=[{id:'wind',name:'Veter',path:windPath},{id:'cameras',name:'Spletne kamere',path:cameraPath},{id:'snow',name:'Padavine in sneg',path:snowPath},{id:'rivers',name:'Pretoki rek',path:riverPath}];
-layerButtons.innerHTML=layers.map(({name,path})=>`<button type="button" title="${name}" aria-label="${name}">
-  <svg viewBox="0 0 24 24" width="24" height="24" class="mx-auto" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg></button>`).join('');
-const buttons=[...layerButtons.querySelectorAll('button')];
-const mark=()=>buttons.forEach((button,i)=>{
-  const on=layers[i].id===layer;
-  button.setAttribute('aria-pressed',String(on));
-  button.classList.toggle('text-blue-600',on);button.classList.toggle('text-zinc-500',!on);
-});
+// The layer bar at the bottom (index.astro): its buttons carry their layer in data-layer.
+const buttons=[...document.querySelectorAll<HTMLButtonElement>('#layers [data-layer]')];
+const mark=()=>buttons.forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.layer===layer)));
 mark();
-buttons.forEach((button,i)=>button.addEventListener('click',()=>{
-  if(layers[i].id===layer)return;
-  layer=layers[i].id;save('layer',layer);
+for(const button of buttons)button.addEventListener('click',()=>{
+  if(button.dataset.layer===layer)return;
+  layer=button.dataset.layer as Layer;save('layer',layer);
   if(layer!=='wind'){stop();setTime(0);}
   mark();void showLayer();
-}));
-const layerControl={onAdd:()=>layerButtons,onRemove:()=>layerButtons.remove()};
+});
 const wide=matchMedia('(min-width: 768px)');
-const placeLayerButtons=()=>{if(map.hasControl(layerControl))map.removeControl(layerControl);map.addControl(layerControl,wide.matches?'bottom-right':'top-right');};
-placeLayerButtons();wide.addEventListener('change',placeLayerButtons);
 void showLayer();
 
 // ---- Site panel ----
@@ -457,7 +439,7 @@ function openSite(id:string) {
 // back to its place in the page when closed).
 const panel=$('site'),panelHome=$('map-page');
 const bubble=new Popup({maxWidth:'none',closeButton:false,closeOnClick:false,focusAfterOpen:false,
-  className:'z-10 [&_.maplibregl-popup-content]:rounded-lg! [&_.maplibregl-popup-content]:p-0! [&_.maplibregl-popup-content]:shadow-lg! [&_.maplibregl-popup-content]:ring-1 [&_.maplibregl-popup-content]:ring-black/5'});
+  className:'z-10 [&_.maplibregl-popup-content]:rounded-xl! [&_.maplibregl-popup-content]:p-0! [&_.maplibregl-popup-content]:shadow-lg! [&_.maplibregl-popup-content]:ring-1 [&_.maplibregl-popup-content]:ring-black/5'});
 bubble.on('close',()=>closePanel());
 function showContent(kind:'wind'|'card') {
   $('site-wind').hidden=kind!=='wind';$('site-card').hidden=kind!=='card';$('site-share').hidden=kind!=='wind';
@@ -469,9 +451,10 @@ function placePanel(at:[number,number]|{lng:number;lat:number},marker?:HTMLEleme
   const {clientWidth:width,clientHeight:height}=map.getContainer();
   if(wide.matches) {
     // The map stays; the bubble opens on the side of the marker with more room (above or below; the header
-    // covers the top 48 px), shifted sideways near the edges, and is at most as tall as that room.
+    // covers the top 56 px, the layer bar the bottom 90 px), shifted sideways near the edges, and is at most as
+    // tall as that room.
     const point=map.project(at),offset=(marker?.offsetHeight??20)/2+4,half=panel.offsetWidth/2||280;
-    const above=point.y-offset-56,below=height-point.y-offset-8;
+    const above=point.y-offset-64,below=height-point.y-offset-96;
     const side=point.x-half<8?'-left':point.x+half>width-8?'-right':'';
     panel.style.maxHeight=`${Math.round(Math.min(Math.max(above,below),innerHeight*0.6))}px`;
     bubble.options.anchor=`${above>=below?'bottom':'top'}${side}` as typeof bubble.options.anchor;
@@ -561,8 +544,15 @@ function renderResults() {
     :'<li class="px-3 py-2 text-zinc-500">Ni zadetkov.</li>';
   if(matches.length)search.setAttribute('aria-activedescendant',`search-${active}`);else search.removeAttribute('aria-activedescendant');
 }
+// Phones: the header's search button shows and hides the search box (desktop always shows it).
+const searchToggle=$('search-toggle');
+function showSearch(open:boolean) {
+  $('map-page').toggleAttribute('data-search',open);searchToggle.setAttribute('aria-expanded',String(open));
+  if(open)search.focus();
+}
+searchToggle.addEventListener('click',()=>showSearch(!$('map-page').hasAttribute('data-search')));
 function pick(station:Station) {
-  search.value='';search.blur();
+  search.value='';search.blur();showSearch(false);
   map.jumpTo({center:[station.location![1],station.location![0]],zoom:Math.max(map.getZoom(),11)});
   openSite(station.id);
 }
@@ -574,6 +564,7 @@ search.addEventListener('keydown',event=>{
     event.preventDefault();active=(active+(event.key==='ArrowDown'?1:-1)+matches.length)%matches.length;renderResults();
   } else if(event.key==='Enter'&&matches[active]) {event.preventDefault();pick(matches[active]);}
   else if(event.key==='Escape'&&search.value) {event.stopPropagation();search.value='';renderResults();}
+  else if(event.key==='Escape'&&!wide.matches) {showSearch(false);searchToggle.focus();}
 });
 results.addEventListener('mousedown',event=>event.preventDefault()); // Keep focus so the click lands.
 results.addEventListener('click',event=>{
@@ -610,7 +601,7 @@ function openLinked():boolean {
 let linkPending=true;
 addEventListener('hashchange',()=>void openLinked());
 $('site-share').addEventListener('click',async()=>{
-  const url=location.href,title=selected?.name??'Paraglajzer';
+  const url=location.href,title=selected?.name??'Agregator';
   try {
     if(navigator.share&&matchMedia('(pointer: coarse)').matches)await navigator.share({title,url});
     else {await navigator.clipboard.writeText(url);$('site-share-status').textContent='Povezava kopirana';$('site-share').title='Kopirano';setTimeout(()=>{$('site-share').title='Deli povezavo';$('site-share-status').textContent='';},2000);}

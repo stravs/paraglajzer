@@ -48,7 +48,7 @@ test('Zemljevid: live markers, site panel with wind graph only',async({page})=>{
   page.on('pageerror',error=>errors.push(error.message));
   page.on('request',request=>{const url=new URL(request.url());if(url.pathname==='/api/source')keys.push(url.searchParams.get('key')||'');});
   await page.goto(base);
-  await expect(page.locator('header')).toHaveText('Agregator veternih postaj');
+  await expect(page.locator('header')).toContainText('Agregator');
   const peter=page.locator('.maplibregl-marker[title^="Sv. Peter"]');
   await expect(peter).toBeAttached({timeout:45000});
   // Skytech covers all of Slovenia; vetr, ARSO and Luftar only Gorenjska (and Kamnik).
@@ -86,13 +86,16 @@ test('Zemljevid: search finds a site without diacritics and opens it',async({pag
   await page.setViewportSize({width:390,height:844});
   await page.goto(base);
   await expect(page.locator('.maplibregl-marker[title^="Kriška gora ·"]')).toBeAttached({timeout:45000});
+  // Phones: the header's search button opens the search box.
+  await expect(page.locator('#site-search')).toBeHidden();
+  await page.locator('#search-toggle').click();
   await page.locator('#site-search').fill('kriska');
   await expect(page.locator('#search-results [role="option"]').first()).toContainText('Kriška gora');
   await page.locator('#site-search').press('Enter');
   await expect(page.locator('#site-name')).toContainText('Kriška gora');
-  await expect(page.locator('#search-results')).toBeHidden();
-  // On phones the site panel covers the bottom search bar; close it to search again.
+  await expect(page.locator('#site-search')).toBeHidden();
   await page.locator('#site-close').click();
+  await page.locator('#search-toggle').click();
   await page.locator('#site-search').fill('xyz nonexistent');
   await expect(page.locator('#search-results')).toContainText('Ni zadetkov.');
   await page.getByRole('link',{name:'Napoved',exact:true}).click();await expect(page).toHaveURL(/\/napoved\//);
@@ -107,7 +110,7 @@ test('Zemljevid: wind layer is the default; with webcams on, wind markers hide a
   await page.addInitScript(([lat,lon])=>{if(!localStorage.getItem('mapView'))localStorage.setItem('mapView',JSON.stringify({center:[lon,lat],zoom:12}));},cam.location);
   await page.goto(base);
   await expect(page.locator('.maplibregl-marker[title^="Krvavec"]')).toBeVisible({timeout:45000});
-  const button=page.getByRole('button',{name:'Spletne kamere'});
+  const button=page.getByRole('button',{name:'Kamere',exact:true});
   await expect(button).toHaveAttribute('aria-pressed','false');
   await page.waitForTimeout(1000);
   expect(requests.filter(url=>url.endsWith('/webcams.json'))).toHaveLength(0);
@@ -135,7 +138,7 @@ test('Zemljevid: wind layer is the default; with webcams on, wind markers hide a
   await button.click();
   // The choice survives a reload.
   await page.reload();
-  await expect(page.getByRole('button',{name:'Spletne kamere'})).toHaveAttribute('aria-pressed','true');
+  await expect(page.getByRole('button',{name:'Kamere',exact:true})).toHaveAttribute('aria-pressed','true');
   expect(errors).toEqual([]);
 });
 test('Zemljevid: snow layer shows non-zero ARSO stations as bar charts; on desktop a tap opens a bubble, for wind stations too',async({page})=>{
@@ -151,7 +154,7 @@ test('Zemljevid: snow layer shows non-zero ARSO stations as bar charts; on deskt
   await page.route('**/api/source?key=snow',route=>route.fulfill({json:{data,fetchedAt:now,checkedAt:now,nextCheck:now+1800000,error:null}}));
   await page.goto(base);
   await expect(page.locator('.maplibregl-marker[title^="Krvavec"]')).toBeAttached({timeout:45000});
-  const button=page.getByRole('button',{name:'Padavine in sneg'});
+  const button=page.getByRole('button',{name:'Sneg',exact:true});
   await button.click();
   await expect(button).toHaveAttribute('aria-pressed','true');
   const kredarica=page.getByRole('button',{name:/^Kredarica · snežna odeja 120 cm/});
@@ -192,7 +195,7 @@ test('Zemljevid: rivers layer shows ARSO flows with a rating dot; tapping one op
   await page.addInitScript(()=>localStorage.setItem('mapView',JSON.stringify({center:[14.6,46.08],zoom:8.5})));
   await page.goto(base);
   await expect(page.locator('.maplibregl-marker[title^="Krvavec"]')).toBeAttached({timeout:45000});
-  await page.getByRole('button',{name:'Pretoki rek'}).click();
+  await page.getByRole('button',{name:'Reke',exact:true}).click();
   const litija=page.getByRole('button',{name:/^Sava · Litija · pretok 612 m³\/s/});
   await expect(litija).toBeVisible();
   await expect(litija.locator('.bg-red-600')).toHaveCount(1);

@@ -1,0 +1,18 @@
+---
+// Dark green bar: logo and the page links. Extra buttons (the map's search) go in the slot, before the links.
+import Logo from './Logo.astro';
+interface Props { page: string; class?: string }
+const { page, class: className } = Astro.props;
+const pages = { Zemljevid: '/', Napoved: '/napoved/' } as const;
+---
+<header class:list={['flex h-14 items-center gap-1 bg-brand-dark px-3 text-white sm:px-5', className]}>
+  <a href="/" class="mr-auto flex items-center gap-2 text-lg font-bold tracking-tight" title="Agregator · vremenska mreža za outdoor">
+    <Logo class="h-7 w-auto" />Agregator
+  </a>
+  <slot />
+  <nav class="flex gap-1" aria-label="Strani">
+    {(Object.keys(pages) as (keyof typeof pages)[]).map(name => (
+      <a href={pages[name]} aria-current={page === name ? 'page' : undefined} class:list={['flex min-h-10 items-center rounded-lg px-2.5 font-medium', page === name ? 'bg-white/15' : 'text-white/75 hover:text-white']}>{name}</a>
+    ))}
+  </nav>
+</header>

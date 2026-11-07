@@ -1,8 +1,8 @@
-# Paraglajzer
+# Agregator
 
-Paragliding weather for Slovenia.
+Vremenska mreža za outdoor: paragliding weather for Slovenia.
 
-- `/`: map of wind stations (vetr.si, Skytech, ARSO, Luftar). Tap a site for its wind graph. Buttons switch the layer: wind, webcams (all ARSO cameras) snow (ARSO's snow depth, new snow and rain) or rivers (ARSO's river flows).
+- `/`: map of wind stations (vetr.si, Skytech, ARSO, Luftar). Tap a site for its wind graph. The bottom bar switches the layer: wind, webcams (all ARSO cameras), snow (ARSO's snow depth, new snow and rain) or rivers (ARSO's river flows).
 - `/napoved/`: ARSO and Zaladin forecasts, sounding, thermals, radar.
 
 Astro + Tailwind + Cloudflare Workers. The Worker (`src/worker.ts`) fetches and caches all sources, so every user shares one copy and providers get few requests.
@@ -18,6 +18,8 @@ npm run dev:fake -- --host   # made-up wind history for the map's time slider
 The map's time slider uses the last 3 h of readings, which the Worker records from each station listing (a cron checks the listings every 10 min). In dev the cron doesn't run, so `dev:fake` makes up a history from the current readings.
 
 The webcam list is `public/webcams.json`. Refresh it now and then with `node scripts/webcams.mjs`.
+
+The logo is `src/components/Logo.astro`, the app icon `public/favicon.svg`. After changing the icon, remake the PNG icons with `node scripts/icons.mjs`.
 
 ## Test
 

@@ -1,1 +1,7 @@
 @import "tailwindcss";
+
+/* Agregator greens: brand for buttons and the app icon, brand-dark for the header. */
+@theme {
+  --color-brand: #1f5039;
+  --color-brand-dark: #1a3d2e;
+}
