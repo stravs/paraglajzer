@@ -3,7 +3,7 @@ import { LogoControl } from '@maptoolkit/maplibre-logo-control';
 import '@maptoolkit/maplibre-logo-control/style.css';
 // MapLibre finds its worker next to its own module, which Vite moves; point it at the real file.
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
-import type { Station,SnowStation,Reading,RiverStation } from '../lib/sources';
+import type { Station,SnowStation,Reading,RiverStation,WebcamFrame } from '../lib/sources';
 import type { WindSample } from '../lib/history';
 import { stationSpots } from '../lib/station-spots';
 import { $,escape,date,freshness,read,save,source,sourceLabel,startPolling,type Snapshot } from './weather';
@@ -214,7 +214,7 @@ play.addEventListener('click',async()=>{
 // - Snow: ARSO's 20 manned stations (Worker source 'snow'): snow depth and new snow as small bar charts.
 // - Rivers: ARSO's gauges that measure flow (Worker source 'rivers'): the flow, with a dot for ARSO's rating.
 type Layer='wind'|'cameras'|'snow'|'rivers';
-interface Webcam {name:string;region:string;location:[number,number];page:string;images:{title:string;url:string}[]}
+interface Webcam {name:string;region:string;location:[number,number];page:string;images:{title:string;url:string;source:string}[]}
 // Webcam marker: a round lens on a stand.
 const cameraPath='<circle cx="12" cy="10" r="7"/><circle cx="12" cy="10" r="2.5"/><path d="M9 16.5 7 21h10l-2-4.5"/>';
 let layer=read<Layer>('layer','wind'),openMarker:Marker|null=null;
@@ -230,6 +230,7 @@ function openCard(marker:Marker,title:string,meta:string,body:string) {
   $('site-name').textContent=title;$('site-meta').innerHTML=meta;
   $('site-card').innerHTML=body;
   showContent('card');
+  showThanks('arso');
   placePanel(marker.getLngLat());
   panel.focus({preventScroll:true});
 }
@@ -254,17 +255,35 @@ async function loadCameras() {
     const images=cam.images.map(image=>{
       const url=`${image.url}?t=${minute}`;
       return `<figure><a href="${escape(url)}" target="_blank" rel="noopener noreferrer" class="block"><img src="${escape(url)}" alt="${escape(`${cam.name} · ${image.title}`)}" loading="lazy" class="aspect-video w-full rounded bg-zinc-100 object-cover"></a>
-        <figcaption class="mt-1 text-xs text-zinc-500">${escape(image.title)}</figcaption></figure>`;
+        <figcaption class="mt-1 text-xs text-zinc-500">${escape(image.title)} · <span data-capture>Čas posnetka se nalaga …</span></figcaption></figure>`;
     }).join('');
     openCard(marker,cam.name,`${arsoLink(cam.page)} · ${escape(cam.region)} · spletna kamera`,`<div class="grid gap-3 py-3">${images}</div>`);
+    const figures=Array.from($('site-card').querySelectorAll('figure'));
+    figures.forEach((figure,i)=>{
+      void source<Record<string,WebcamFrame>>(cam.images[i].source).then(({data})=>{
+        if(!figure.isConnected)return;
+        const frame=data?.[cam.images[i].url],caption=figure.querySelector<HTMLElement>('[data-capture]')!;
+        if(!frame){caption.textContent='Čas posnetka ni na voljo';return;}
+        // Preload before replacing the image and its timestamp together.
+        const image=figure.querySelector('img')!,next=new Image();
+        next.onload=()=>{
+          if(!figure.isConnected)return;
+          image.src=frame.url;figure.querySelector('a')!.href=frame.url;
+          const time=document.createElement('time');time.dateTime=frame.at;time.textContent=date(frame.at);
+          caption.replaceChildren(time);
+        };
+        next.onerror=()=>{caption.textContent='Čas posnetka ni na voljo';};
+        next.src=frame.url;
+      }).catch(()=>{figure.querySelector('[data-capture]')!.textContent='Čas posnetka ni na voljo';});
+    });
   }));
 }
 // Each station is a small bar chart of its non-zero readings: snow depth and new snow, each bar with its
 // value under it (unit in the title and card). Bar height grows with the square root of the value, full at the
 // cap, so small amounts still show. Stations with all readings 0 or missing are left out.
 const snowBars=[
-  {key:'depth',title:'Snežna odeja',unit:'cm',cap:200,color:'bg-sky-600'},
   {key:'newSnow',title:'Novi sneg',unit:'cm',cap:50,color:'bg-sky-300'},
+  {key:'depth',title:'Snežna odeja',unit:'cm',cap:200,color:'bg-sky-600'},
 ] as const;
 async function loadSnow() {
   const {data}=await source<SnowStation[]>('snow');
@@ -468,7 +487,7 @@ function setPanel(open:boolean) {
   for(const name of closedPanel)panel.classList.toggle(name,!open);
   if(open)page.dataset.drawer=kind;else delete page.dataset.drawer;
 }
-// Under the graph, thanks to the station's data source (its block in #site-thanks).
+// Under the readings, thanks to the station's data source (its block in #site-thanks).
 function showThanks(source:Station['source']|null) {
   for(const block of $('site-thanks').querySelectorAll<HTMLElement>('[data-source]'))block.hidden=block.dataset.source!==source;
 }

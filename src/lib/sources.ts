@@ -215,6 +215,22 @@ export function parseArsoHistory(xml: string): WindSample[] {
 // ARSO "Padavine in višina snežne odeje": the 20 manned stations' rain, new snow and snow depth, one table per
 // observation time, newest first. Snow is mostly measured only at 07:00, so each value comes from the newest
 // table that has it, with its own time. Positions are from ARSO's station XML (observation_si_latest.xml).
+export interface WebcamFrame { url:string; at:string; }
+// Match each latest-image URL to its newest dated frame, keeping image and capture time together.
+export function parseWebcams(body:string):Record<string,WebcamFrame> {
+  const data=JSON.parse(body),frames:Record<string,WebcamFrame>={};
+  for(const series of Object.values(data)) {
+    if(!Array.isArray(series))continue;
+    for(const frame of series) {
+      const match=typeof frame?.path==='string' && frame.path.match(/^\/uploads\/probase\/www\/observ\/webcam\/([A-Z0-9_-]+)_dir\/siwc_\d{8}-\d{4}_\1_([a-z]+)\.jpg$/);
+      if(!match || !Number.isFinite(Date.parse(frame.valid)))continue;
+      const latest=`${ARSO}/uploads/probase/www/observ/webcam/${match[1]}_dir/siwc_${match[1]}_${match[2]}.jpg`;
+      if(!frames[latest] || Date.parse(frame.valid)>Date.parse(frames[latest].at))frames[latest]={url:`${ARSO}${frame.path}`,at:frame.valid};
+    }
+  }
+  if(!Object.keys(frames).length)throw new Error('Webcam frames missing');
+  return frames;
+}
 export const snowUrl = `${ARSO}/uploads/probase/www/observ/surface/text/sl/observation_si-snow_latest.html`;
 export const snowStations: Record<string, [number, number]> = {
   'Bilje pri Novi Gorici': [45.8958, 13.6289], 'Celje': [46.2447, 15.2525], 'Črnomelj': [45.5603, 15.1508],
@@ -358,6 +374,8 @@ export function sourceFor(key: string, anchor?: string): Source | null {
   if (key === 'vetr') return { url:'https://vetr.si/', interval:600, stations:true, parse:body => gorenjska(parseVetr(body)), next:nextVetrCheck };
   if (key === 'skytech') return { url:'https://skytech.si/skytechsys/data.php', interval:600, init:{method:'POST', body:'c=tabela', headers:{'Content-Type':'application/x-www-form-urlencoded'}}, stations:true, parse:parseSkytech };
   if (key === 'aviation') return { url:`${ARSO}/uploads/probase/www/aviation/fproduct/text/sl/aviation.txt`, interval:600, parse:body => body.replace(/\^/g,'Č').replace(/~/g,'č').replace(/\[/g,'Š').replace(/\{/g,'š').replace(/@/g,'Ž').replace(/`/g,'ž') };
+  const webcam=key.match(/^webcam:(METEO-\d{1,6}_(?:n|ne|e|se|s|sw|w|nw))$/);
+  if (webcam) return { url:`${ARSO}/uploads/probase/www/observ/webcam/json/sl/webcam_${webcam[1]}_data.json`, interval:600, parse:body=>parseWebcams(`{"series":${body}}`) };
   if (key === 'snow') return { url:snowUrl, interval:1800, parse:parseSnow };
   if (key === 'rivers') return { url:riverUrl, interval:1800, parse:parseRivers };
   if (key === 'sounding') return { url:`${ARSO}/uploads/probase/www/observ/upper/sigps_ljubljana-bezigrad_zoom.png`, interval:1800, image:true };

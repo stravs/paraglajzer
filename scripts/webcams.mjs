@@ -29,7 +29,7 @@ async function arso() {
     const images = (await each(p.directions, 2, async direction => {
       const series = await get(`${ARSO}/uploads/probase/www/observ/webcam/json/sl/webcam_${p.id}${direction}_data.json`, 'json');
       const folder = series.at(-1)?.path.match(/webcam\/([^/]+)_dir\//)?.[1];
-      return folder && { title: `Proti ${compass[direction] ?? direction}`, url: `${ARSO}/uploads/probase/www/observ/webcam/${folder}_dir/siwc_${folder}_${direction}.jpg` };
+      return folder && { source: `webcam:${p.id}${direction}`, title: `Proti ${compass[direction] ?? direction}`, url: `${ARSO}/uploads/probase/www/observ/webcam/${folder}_dir/siwc_${folder}_${direction}.jpg` };
     })).filter(Boolean);
     const [lon, lat] = geometry.coordinates;
     return images.length && { name: p.title, region: p.parent_title, location: [round(lat), round(lon)], page: 'https://vreme.arso.gov.si/', images };
