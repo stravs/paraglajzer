@@ -263,8 +263,8 @@ async function loadCameras() {
 // value under it (unit in the title and card). Bar height grows with the square root of the value, full at the
 // cap, so small amounts still show. Stations with all readings 0 or missing are left out.
 const snowBars=[
-  {key:'depth',title:'Snežna odeja',unit:'cm',cap:200,color:'bg-sky-300'},
-  {key:'newSnow',title:'Novi sneg',unit:'cm',cap:50,color:'bg-sky-600'},
+  {key:'depth',title:'Snežna odeja',unit:'cm',cap:200,color:'bg-sky-600'},
+  {key:'newSnow',title:'Novi sneg',unit:'cm',cap:50,color:'bg-sky-300'},
 ] as const;
 async function loadSnow() {
   const {data}=await source<SnowStation[]>('snow');
