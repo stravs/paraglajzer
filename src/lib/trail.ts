@@ -4,7 +4,7 @@ import type { Station } from './sources.ts';
 // The Worker records each new listing reading; no extra requests to the providers.
 export type Reading = Pick<Station, 'observedAt' | 'avg' | 'gust' | 'direction'>;
 export type Trail = Record<string, Reading[]>;
-// The slider goes trailHours back. One extra hour is kept, so even at the far end each station has its last
+// The time buttons go trailHours back. One extra hour is kept, so even at the far end each station has its last
 // reading from before that time (ARSO only reports every 30 min).
 export const trailHours = 3;
 const keptHours = trailHours + 1;

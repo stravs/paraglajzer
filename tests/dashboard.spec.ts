@@ -104,6 +104,109 @@ test('Zemljevid: search finds a site without diacritics and opens it',async({pag
   await page.getByRole('button',{name:'Meni'}).click();
   await page.getByRole('link',{name:'Napoved',exact:true}).click();await expect(page).toHaveURL(/\/napoved\//);
 });
+test('Zemljevid: phones switch between map and list, for every layer; a row opens the site full screen over the list',async({page})=>{
+  await page.setViewportSize({width:390,height:844});
+  await page.goto(base);
+  await expect(page.locator('.maplibregl-marker[title^="Sv. Peter"]')).toBeAttached({timeout:45000});
+  await expect(page.locator('#list')).toBeHidden();
+  await page.locator('#mode-toggle').click();
+  await expect(page.locator('#list')).toBeVisible();
+  await expect(page.locator('#mode-toggle')).toHaveAccessibleName('Zemljevid');
+  // Stations in view on the map come first (the phone start view shows the home sites), then a divider, then the rest.
+  const first=page.locator('#list-items > li').first();
+  await expect(first.locator('h3')).toHaveText('Gorenjska');
+  const peter=first.locator('[data-id="vetr-peter"]');
+  await expect(peter).toContainText('Sv. Peter');
+  await expect(page.locator('#list-items > [data-divider]')).toHaveCount(1);
+  await expect(first.locator('[data-id]')).not.toHaveCount(await page.locator('#list-items [data-id]').count());
+  await peter.click();
+  await expect(page.locator('#site-name')).toHaveText('Sv. Peter');
+  await expect(peter).toHaveAttribute('aria-current','true');
+  await expect(page.locator('#site')).toHaveAttribute('data-sheet','full');
+  // Over the list the handle closes it (no half sheet there).
+  await page.locator('#site-handle').click();
+  await expect(page.locator('#site')).toBeHidden();
+  await expect(page.locator('#list')).toBeVisible();
+  // The mode is remembered. In list mode the layers are tabs above the list; each layer has its list.
+  await page.reload();
+  await expect(page.locator('#list')).toBeVisible();
+  await page.getByRole('button',{name:'Kamere'}).click();
+  const blegos=page.locator('#list-items [data-id^="cameras-"]',{hasText:'Blegoš'});
+  await blegos.click();
+  await expect(page.locator('#site-name')).toHaveText('Blegoš');
+  await expect(page.locator('#site-card img').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#site')).toBeHidden();
+  await expect(blegos).toBeFocused();
+  await page.locator('#mode-toggle').click();
+  await expect(page.locator('#list')).toBeHidden();
+});
+test('Zemljevid: time buttons bottom left step to an earlier time and back',async({page})=>{
+  await page.setViewportSize({width:390,height:844});
+  await page.goto(base);
+  const earlier=page.getByRole('button',{name:'Prej'}),later=page.getByRole('button',{name:'Kasneje'}),label=page.locator('#time-label');
+  await expect(earlier).toBeVisible({timeout:45000});
+  expect((await page.locator('#time').boundingBox())!.x).toBeLessThan(20);
+  await expect(label).toHaveText('zdaj');await expect(later).toBeDisabled();
+  await earlier.click();await earlier.click();
+  await expect(label).toHaveAttribute('title','pred 20 min');
+  await expect(label).toHaveText(/^\d\d:\d\d$/);
+  await later.click();
+  await expect(label).toHaveAttribute('title','pred 10 min');
+  for(let i=0;i<17;i++)await earlier.click();
+  await expect(label).toHaveAttribute('title','pred 3 h');await expect(earlier).toBeDisabled();
+  // Hidden in list mode; back on the map it still shows the picked time.
+  await page.locator('#mode-toggle').click();await expect(earlier).toBeHidden();
+  await page.locator('#mode-toggle').click();await expect(label).toHaveAttribute('title','pred 3 h');
+});
+test('Zemljevid: opening a station moves the map only when the station is out of sight',async({page})=>{
+  await page.setViewportSize({width:1280,height:800});
+  await page.goto(base);
+  const peter=page.locator('#list-items [data-id="vetr-peter"]');
+  await expect(peter).toBeVisible({timeout:45000});
+  await page.waitForTimeout(1000);
+  const center=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('mapView')??'null')?.center);
+  const before=await center();
+  await peter.click();
+  await expect(page.locator('#site-name')).toHaveText('Sv. Peter');
+  await page.waitForTimeout(1000);
+  expect(await center()).toEqual(before);
+  // A far station (after the divider): the map goes there.
+  await page.locator('#site-close').click();
+  const far=page.locator('#list-items > [data-divider] + li [data-id]').first();
+  await far.click();
+  await page.waitForTimeout(1500);
+  expect(await center()).not.toEqual(before);
+});
+test('Zemljevid: phone sheet opens at peek height, the handle makes it full; layer tabs hide meanwhile',async({page})=>{
+  await page.setViewportSize({width:390,height:844});
+  await page.goto(base);
+  const peter=page.locator('.maplibregl-marker[title^="Sv. Peter"]');
+  await expect(peter).toBeAttached({timeout:45000});
+  await peter.dispatchEvent('click');
+  const sheet=page.locator('#site');
+  await expect(sheet).toHaveAttribute('data-sheet','peek');
+  await expect(page.locator('#layers')).toBeHidden();
+  await page.waitForTimeout(500);
+  expect((await sheet.boundingBox())!.height).toBeLessThanOrEqual(844*0.45+1);
+  const handle=page.locator('#site-handle');
+  await handle.click();
+  await expect(sheet).toHaveAttribute('data-sheet','full');
+  await expect(handle).toHaveAttribute('aria-label','Pomanjšaj');
+  await page.waitForTimeout(500);
+  expect((await sheet.boundingBox())!.y).toBeLessThanOrEqual(57);
+  await handle.click();
+  await expect(sheet).toHaveAttribute('data-sheet','peek');
+  await page.locator('#site-close').click();
+  await expect(page.locator('#layers')).toBeVisible();
+});
+test('Zemljevid: desktop shows the station list as a column left of the map, without the switch',async({page})=>{
+  await page.setViewportSize({width:1280,height:800});
+  await page.goto(base);
+  await expect(page.locator('#list-items [data-id="vetr-peter"]')).toBeVisible({timeout:45000});
+  await expect(page.locator('#mode-toggle')).toBeHidden();
+  expect((await page.locator('#list').boundingBox())!.width).toBe(320);
+});
 test('Zemljevid: wind layer is the default; with webcams on, wind markers hide and a camera on a station can be tapped; images load only when opened',async({page})=>{
   await page.setViewportSize({width:390,height:844});
   const errors:string[]=[],requests:string[]=[];

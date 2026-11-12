@@ -1,4 +1,4 @@
-import { AttributionControl,Map as MapLibre,Marker,NavigationControl,setWorkerUrl,type StyleSpecification } from 'maplibre-gl';
+import { AttributionControl,Map as MapLibre,Marker,NavigationControl,setWorkerUrl,type LngLatLike,type StyleSpecification } from 'maplibre-gl';
 import { LogoControl } from '@maptoolkit/maplibre-logo-control';
 import '@maptoolkit/maplibre-logo-control/style.css';
 // MapLibre finds its worker next to its own module, which Vite moves; point it at the real file.
@@ -53,8 +53,8 @@ const map=new MapLibre({
   container:'map',...(hasSavedView
     ?{center:savedView!.center as [number,number],zoom:savedView!.zoom as number}
     :matchMedia('(min-width: 768px)').matches
-    ?{bounds:[[13.38,45.42],[16.6,46.88]],fitBoundsOptions:{padding:{top:110,bottom:40,left:40,right:60}}}
-    :{bounds:[[14.17,46.34],[14.34,46.44]],fitBoundsOptions:{padding:{top:60,bottom:110,left:60,right:60}}}),maxPitch:0,dragRotate:false,touchPitch:false,attributionControl:false,
+    ?{bounds:[[13.38,45.42],[16.6,46.88]],fitBoundsOptions:{padding:{top:110,bottom:40,left:360,right:60}}}
+    :{bounds:[[14.17,46.34],[14.34,46.44]],fitBoundsOptions:{padding:{top:110,bottom:120,left:60,right:60}}}),maxPitch:0,dragRotate:false,touchPitch:false,attributionControl:false,
   // Maptoolkit "Hiking" (vector, hillshading, contours; free, no key), with the layers above left out (trimStyle).
   style:'https://styles.maptoolkit.org/hiking.json',
   maxBounds:slovenia,
@@ -66,7 +66,7 @@ map.on('moveend',()=>{
   save('mapView',{center:[+lng.toFixed(5),+lat.toFixed(5)],zoom:+map.getZoom().toFixed(2)});
 });
 // Maptoolkit's terms require its logo and a fully visible credit on the map.
-// Both at the top, just under the header (index.astro); the bottom has the slider and buttons.
+// Both at the top, just under the header (index.astro); the bottom has the buttons.
 map.addControl(new LogoControl(),'top-left');
 map.addControl(new AttributionControl({compact:false}),'top-right');
 map.addControl(new NavigationControl({showCompass:false}),'bottom-right');
@@ -161,52 +161,46 @@ function renderMarkers() {
     element.style.zIndex=String(4+rank);labelElement.style.zIndex=String(1+rank);
     element.setAttribute('title',label(shown));element.setAttribute('aria-label',label(shown));
   }
-  hideStations();
+  hideStations();renderList();
 }
 
-// ---- Time slider ----
+// ---- Time ----
 // Shows the arrows at an earlier time, up to trailHours back, from the history the Worker keeps (lib/trail.ts).
 // Each station shows its last reading at or before that time; none → a grey dot. The site panel stays current.
-let trail:Trail={},viewTime:number|null=null,playing=0;
-const slider=$<HTMLInputElement>('time-slider'),play=$('time-play');
-slider.min=String(-trailHours*60);
+// The time buttons (index.astro) step 10 minutes later or earlier; between them the time shown.
+let trail:Trail={},viewTime:number|null=null,minutes=0;
+const later=$<HTMLButtonElement>('time-later'),earlier=$<HTMLButtonElement>('time-earlier'),step=10;
+const clock=(ms:number)=>new Intl.DateTimeFormat('sl-SI',{timeZone:'Europe/Ljubljana',hour:'2-digit',minute:'2-digit'}).format(ms);
 function atViewTime(station:Station):Station {
   if(viewTime===null)return station;
   const reading=(trail[station.id]??[]).findLast(reading=>Date.parse(reading.observedAt??'')<=viewTime!);
   return {...station,...reading??{observedAt:null,avg:null,gust:null,direction:'—'}};
 }
-// The slider shows once the history covers trailHours. After a deploy it starts empty and fills as
-// readings come in; until then it stays hidden, so its range never starts with no data.
+// The buttons show once the history covers trailHours. After a deploy it starts empty and fills as
+// readings come in; until then they stay hidden, so the range never starts with no data.
 const historyFull=()=>Object.values(trail).some(readings=>Date.parse(readings[0].observedAt??'')<=Date.now()-trailHours*3600000);
 async function loadTrail() {
   try {const result=await source<Trail>('trail');if(result.data)trail=result.data;}
   catch {/* Without history, past times show grey dots. */}
 }
-function setTime(minutes:number) {
-  slider.value=String(minutes);
-  viewTime=minutes<0?Date.now()+minutes*60000:null;
-  // How long ago: "pred 1 h 20 min".
+function setTime(next:number) {
+  minutes=next;viewTime=minutes<0?Date.now()+minutes*60000:null;
+  later.disabled=minutes>=0;earlier.disabled=minutes<=-trailHours*60;
+  // The clock time; the title says how long ago: "pred 1 h 20 min".
   const hours=Math.floor(-minutes/60),rest=-minutes%60;
-  $('time-label').textContent=viewTime===null?'zdaj':`pred ${[hours&&`${hours} h`,rest&&`${rest} min`].filter(Boolean).join(' ')}`;
+  const label=$('time-label');
+  label.textContent=viewTime===null?'zdaj':clock(viewTime);
+  label.title=viewTime===null?'zdaj':`pred ${[hours&&`${hours} h`,rest&&`${rest} min`].filter(Boolean).join(' ')}`;
   renderMarkers();
 }
-const playIcon='<path d="M8 5v14l11-7z" fill="currentColor"/>',pauseIcon='<path d="M7 5h3v14H7zM14 5h3v14h-3z" fill="currentColor"/>';
-function stop() {
-  clearInterval(playing);playing=0;
-  play.setAttribute('aria-pressed','false');play.querySelector('svg')!.innerHTML=playIcon;
-}
-slider.addEventListener('input',async()=>{stop();setTime(Number(slider.value));await loadTrail();renderMarkers();});
-// Play: from trailHours back to now in 10-minute steps, half a second each.
-play.addEventListener('click',async()=>{
-  if(playing){stop();return;}
-  play.setAttribute('aria-pressed','true');play.querySelector('svg')!.innerHTML=pauseIcon;
-  playing=window.setInterval(()=>{const next=Number(slider.value)+10;setTime(next>=0?0:next);if(next>=0)stop();},500);
-  await loadTrail();setTime(-trailHours*60);
+for(const [button,change] of [[later,step],[earlier,-step]] as const)button.addEventListener('click',async()=>{
+  setTime(Math.min(0,Math.max(-trailHours*60,minutes+change)));
+  await loadTrail();renderMarkers();
 });
 
 // ---- Layers: wind, webcams, snow ----
 // The map has four layers: wind (default), webcams, snow and rivers; buttons pick the active one and the choice is
-// remembered. Only the active layer is shown: with another one active, the wind markers and the time slider hide.
+// remembered. Only the active layer is shown: with another one active, the wind markers and the time buttons hide.
 // Webcam and snow markers are buttons like the station labels; tapping one opens it in the panel (see "Panel").
 // Their data loads when the layer is first shown.
 // - Webcams: all ARSO ones (public/webcams.json, made by scripts/webcams.mjs); a card's images load only when
@@ -218,6 +212,10 @@ interface Webcam {name:string;region:string;location:[number,number];page:string
 // Webcam marker: a round lens on a stand.
 const cameraPath='<circle cx="12" cy="10" r="7"/><circle cx="12" cy="10" r="2.5"/><path d="M9 16.5 7 21h10l-2-4.5"/>';
 let layer=read<Layer>('layer','wind'),openMarker:Marker|null=null;
+// A row in the station list (see "List"): group heading, title, a small line under it, an icon and a value on the
+// right (icon and value are HTML). Each extra layer's item is its marker with its row.
+interface Row {group:string;title:string;sub:string;icon:string;value:string;fade?:boolean}
+interface Item {marker:Marker;row:Row}
 // The open marker gets a green ring, like a selected station's label.
 const markerButton=(marker:Marker)=>marker.getElement().firstElementChild as HTMLButtonElement;
 function ring(marker:Marker|null,on:boolean) {
@@ -230,7 +228,7 @@ function openCard(marker:Marker,title:string,meta:string,body:string) {
   $('site-name').textContent=title;$('site-meta').innerHTML=meta;
   $('site-card').innerHTML=body;
   showContent('card');
-  showThanks('arso');
+  showThanks('arso');renderList();
   placePanel(marker.getLngLat());
   panel.focus({preventScroll:true});
 }
@@ -249,7 +247,9 @@ const arsoLink=(url:string)=>`<a href="${escape(url)}" target="_blank" rel="noop
 async function loadCameras() {
   const list=await (await fetch('/webcams.json')).json() as Webcam[];
   const icon=`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${cameraPath}</svg>`;
-  return list.map(cam=>overlayMarker(cam.location,'grid size-7 place-items-center rounded-full text-zinc-700 hover:text-black',icon,`Spletna kamera: ${cam.name}`,marker=>{
+  return list.map((cam):Item=>({row:{group:cam.region,title:cam.name,sub:cam.images.map(image=>image.title).join(' · '),value:'',
+    icon:`<span class="grid size-7 place-items-center rounded-full text-zinc-700 ring-1 ring-black/10">${icon}</span>`},
+  marker:overlayMarker(cam.location,'grid size-7 place-items-center rounded-full text-zinc-700 hover:text-black',icon,`Spletna kamera: ${cam.name}`,marker=>{
     // Bust browser caches once a minute so a reopened card shows a fresh image.
     const minute=Math.floor(Date.now()/60000);
     const images=cam.images.map(image=>{
@@ -276,7 +276,7 @@ async function loadCameras() {
         next.src=frame.url;
       }).catch(()=>{figure.querySelector('[data-capture]')!.textContent='Čas posnetka ni na voljo';});
     });
-  }));
+  })}));
 }
 // Each station is a small bar chart of its non-zero readings: snow depth and new snow, each bar with its
 // value under it (unit in the title and card). Bar height grows with the square root of the value, full at the
@@ -289,14 +289,18 @@ async function loadSnow() {
   const {data}=await source<SnowStation[]>('snow');
   if(!data)throw new Error('Snow unavailable');
   const amount=(reading:Reading|null,unit:string)=>reading?`${reading.value} ${unit}${reading.hours?`/${reading.hours} h`:''}`:'—';
-  return data.filter(station=>snowBars.some(bar=>station[bar.key]?.value)).map(station=>{
+  const flake='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-sky-600" aria-hidden="true"><path d="M2 12h20M12 2v20M20 16l-4-4 4-4M4 8l4 4-4 4M16 4l-4 4-4-4M8 20l4-4 4 4"/></svg>';
+  return data.filter(station=>snowBars.some(bar=>station[bar.key]?.value)).map((station):Item=>{
     const bars=snowBars.filter(bar=>station[bar.key]?.value).map(bar=>{
       const {value}=station[bar.key]!,height=Math.max(4,Math.round(48*Math.sqrt(Math.min(value,bar.cap)/bar.cap)));
       return `<span class="flex flex-col items-center gap-0.5"><span class="w-4 rounded-t-sm ${bar.color}" style="height:${height}px"></span>
         <span class="text-xs leading-4 font-semibold tabular-nums">${value}</span></span>`;
     }).join('');
     const name=`${station.name} · ${snowBars.map(bar=>`${bar.title.toLowerCase()} ${amount(station[bar.key],bar.unit)}`).join(' · ')}`;
-    return overlayMarker(station.location,'flex items-end gap-1.5 rounded-md px-1.5 pt-1.5 pb-0.5 text-zinc-900',bars,name,marker=>{
+    const {depth,newSnow}=station,at=depth?.at??newSnow?.at;
+    const row={group:'',title:station.name,sub:at?date(at):'',icon:flake,
+      value:`${depth?.value?`${depth.value}<span class="font-normal text-zinc-500"> cm</span>`:''}${newSnow?.value?` <span class="text-sky-600">+${newSnow.value}</span>`:''}`};
+    return {row,marker:overlayMarker(station.location,'flex items-end gap-1.5 rounded-md px-1.5 pt-1.5 pb-0.5 text-zinc-900',bars,name,marker=>{
       const rows=snowBars.map(bar=>{
         const reading=station[bar.key];
         return `<tr><th class="py-1 pr-3 text-left font-normal text-zinc-500"><span class="mr-1.5 inline-block size-2.5 rounded-sm ${bar.color}"></span>${bar.title}</th>
@@ -304,7 +308,7 @@ async function loadSnow() {
       }).join('');
       openCard(marker,station.name,`${arsoLink('https://meteo.arso.gov.si/met/sl/weather/observ/surface/snow/')} · sneg`,
         `<div class="py-1"><table class="w-full text-sm"><tbody class="[&>tr]:border-b [&>tr]:border-zinc-100 [&>tr:last-child]:border-0">${rows}</tbody></table></div>`);
-    });
+    })};
   });
 }
 // River flow in m³/s: small flows with more decimals. The dot: amber low, blue normal, dark blue high, red at or
@@ -318,11 +322,13 @@ async function loadRivers() {
   const {data}=await source<RiverStation[]>('rivers');
   if(!data)throw new Error('Rivers unavailable');
   const unit=(value:number|null,text:string)=>value===null?'—':`${value} ${text}`;
-  return data.map(station=>{
+  return data.map((station):Item=>{
     const color=flowColor(station),flow=`${flowText(station.flow)} m³/s`;
+    const row={group:station.river,title:station.place,sub:station.rating||'ni ocene',icon:`<span class="size-3 rounded-full ${color}"></span>`,
+      value:`${flowText(station.flow)}<span class="font-normal text-zinc-500"> m³/s</span>`};
     const label=`<span class="size-2 shrink-0 rounded-full ${color}"></span>${flowText(station.flow)}`;
     const name=`${station.river} · ${station.place} · pretok ${flow}${station.rating?` · ${station.rating}`:''}`;
-    return overlayMarker(station.location,'flex items-center gap-1 rounded-full px-1.5 text-xs leading-5 font-semibold tabular-nums whitespace-nowrap text-zinc-900',label,name,marker=>{
+    return {row,marker:overlayMarker(station.location,'flex items-center gap-1 rounded-full px-1.5 text-xs leading-5 font-semibold tabular-nums whitespace-nowrap text-zinc-900',label,name,marker=>{
       const row=(title:string,value:string,note='')=>`<tr><th class="py-1 pr-3 text-left font-normal text-zinc-500">${title}</th>
         <td class="py-1 font-semibold tabular-nums">${value}</td><td class="py-1 pl-3 text-right text-xs text-zinc-500">${escape(note)}</td></tr>`;
       openCard(marker,`${station.river} · ${station.place}`,`${arsoLink('https://www.arso.gov.si/vode/podatki/amp/')} · vodomerna postaja · ${station.observedAt?escape(date(station.observedAt)):''}`,
@@ -330,14 +336,14 @@ async function loadRivers() {
           ${row('Pretok',`<span class="mr-1.5 inline-block size-2.5 rounded-full ${color}"></span>${flow}`,station.rating)}
           ${row('Vodostaj',unit(station.level,'cm'))}${row('Temperatura vode',unit(station.temperature,'°C'))}
           ${station.floodFlows.length?row('Opozorilni pretoki',`${station.floodFlows.map(flowText).join(' / ')} m³/s`,'1. / 2. / 3. stopnja'):''}</tbody></table></div>`);
-    });
+    })};
   });
 }
-// Each extra layer's markers, loaded once on first show.
-const overlays:Record<Exclude<Layer,'wind'>,{load:()=>Promise<Marker[]>;task?:Promise<Marker[]>|null;markers:Marker[];error:string}>={
-  cameras:{load:loadCameras,markers:[],error:'Spletne kamere niso dosegljive'},
-  snow:{load:loadSnow,markers:[],error:'Podatki o snegu niso dosegljivi'},
-  rivers:{load:loadRivers,markers:[],error:'Pretoki rek niso dosegljivi'},
+// Each extra layer's markers and list rows, loaded once on first show (task: null after a failed load).
+const overlays:Record<Exclude<Layer,'wind'>,{load:()=>Promise<Item[]>;task?:Promise<Item[]>|null;items:Item[];error:string}>={
+  cameras:{load:loadCameras,items:[],error:'Spletne kamere niso dosegljive'},
+  snow:{load:loadSnow,items:[],error:'Podatki o snegu niso dosegljivi'},
+  rivers:{load:loadRivers,items:[],error:'Pretoki rek niso dosegljivi'},
 };
 // Wind markers, and the spinning arrows while they load, show only on the wind layer.
 function hideStations() {
@@ -347,13 +353,13 @@ async function showLayer() {
   const shown=layer;
   closePanel();hideStations();
   $('time').classList.toggle('hidden!',layer!=='wind');$('river-legend').hidden=layer!=='rivers';
-  for(const [name,overlay] of Object.entries(overlays))if(name!==layer)for(const marker of overlay.markers)marker.remove();
+  for(const [name,overlay] of Object.entries(overlays))if(name!==layer)for(const {marker} of overlay.items)marker.remove();
   if(layer==='wind')return;
   const overlay=overlays[layer];
-  try {overlay.markers=await (overlay.task??=overlay.load());}
-  catch {overlay.task=null;$('map-status').textContent=overlay.error;return;}
+  try {overlay.items=await (overlay.task??=overlay.load());}
+  catch {overlay.task=null;$('map-status').textContent=overlay.error;renderList();return;}
   // Unless another layer was picked meanwhile.
-  if(layer===shown)for(const marker of overlay.markers)marker.addTo(map);
+  if(layer===shown){for(const {marker} of overlay.items)marker.addTo(map);renderList();}
 }
 // The layer bar at the bottom (index.astro): its buttons carry their layer in data-layer.
 const buttons=[...document.querySelectorAll<HTMLButtonElement>('#layers [data-layer]')];
@@ -362,8 +368,8 @@ mark();
 for(const button of buttons)button.addEventListener('click',()=>{
   if(button.dataset.layer===layer)return;
   layer=button.dataset.layer as Layer;save('layer',layer);
-  if(layer!=='wind'){stop();setTime(0);}
-  mark();void showLayer();
+  if(layer!=='wind')setTime(0);
+  mark();renderList();void showLayer();
 });
 const wide=matchMedia('(min-width: 768px)');
 void showLayer();
@@ -464,28 +470,36 @@ function showContent(next:'wind'|'card') {
   // Wind graphs need the width; a webcam or snow card is narrower (same widths as --drawer in index.astro).
   panel.classList.toggle('md:w-[560px]',kind==='wind');panel.classList.toggle('md:w-96',kind==='card');
 }
-function placePanel(at:[number,number]|{lng:number;lat:number}) {
+// The part of the map not covered: below the header (phones: the layer tabs), right of the desktop list column and
+// left of the open desktop drawer. The phone bottom sheet doesn't count: what was seen before the tap stays put.
+const list=$('list'),header=document.querySelector('header')!;
+function freeArea() {
+  const {clientWidth:width,clientHeight:height}=map.getContainer();
+  return wide.matches
+    ?{left:list.offsetWidth,right:width-(page.dataset.drawer?panel.offsetWidth:0),top:header.offsetHeight,bottom:height}
+    :{left:0,right:width,top:Math.max(header.offsetHeight,$('layers').getBoundingClientRect().bottom),bottom:height};
+}
+// The map stays while what was opened is in sight. Otherwise it moves there (zoomed in to at least 11), into the
+// middle of the free part.
+function placePanel(at:LngLatLike) {
   setPanel(true);
-  const {clientWidth:width,clientHeight:height}=map.getContainer(),point=map.project(at);
-  if(wide.matches) {
-    // The map stays, unless the marker is under the drawer: then it moves to the middle of the free part.
-    const free=width-panel.offsetWidth;
-    if(point.x>free-40)map.panBy([point.x-free/2,0]);
-  } else {
-    // Move the marker above the bottom sheet so it stays visible.
-    map.panBy([point.x-width/2,point.y-height*0.15]);
-  }
+  const {left,right,top,bottom}=freeArea(),{x,y}=map.project(at),margin=30;
+  if(x>=left+margin&&x<=right-margin&&y>=top+margin&&y<=bottom-margin)return;
+  const {clientWidth:width,clientHeight:height}=map.getContainer();
+  map.easeTo({center:at,zoom:Math.max(map.getZoom(),11),offset:[(left+right-width)/2,(top+bottom-height)/2]});
 }
 // What is open (station or card) is closed, but the panel stays: something else opens in it next.
 function clearOpen() {
   if(selected){selected=null;++historyRequest;renderMarkers();showThanks(null);}
-  ring(openMarker,false);openMarker=null;
+  ring(openMarker,false);openMarker=null;renderList();
 }
 // Open/close with a slide (up on phones, from the right on desktop) and fade. data-drawer moves the map controls.
 const closedPanel=['invisible','opacity-0','max-md:translate-y-full','md:translate-x-full'];
 function setPanel(open:boolean) {
+  if(open&&!page.dataset.drawer)setSheet(inList()?'full':'peek');
   for(const name of closedPanel)panel.classList.toggle(name,!open);
   if(open)page.dataset.drawer=kind;else delete page.dataset.drawer;
+  renderList(); // The desktop drawer covers part of the map.
 }
 // Under the readings, thanks to the station's data source (its block in #site-thanks).
 function showThanks(source:Station['source']|null) {
@@ -496,11 +510,42 @@ function closePanel(returnFocus=false) {
   const station=selected?.id,marker=openMarker;
   // Nothing open (also at start-up, before the panel's state below exists).
   if(!station&&!marker)return;
+  // In the phone list, focus goes back to the open row instead of its marker.
+  const row=!wide.matches&&mode==='list'?listItems.querySelector<HTMLElement>('[aria-current="true"]')?.dataset.id:undefined;
   clearOpen();
   setPanel(false);
   if(station)window.history.replaceState(null,'',location.pathname+location.search);
-  if(returnFocus)(station?markers.get(station)?.getElement():marker&&markerButton(marker))?.focus({preventScroll:true});
+  if(returnFocus)(row?listItems.querySelector<HTMLElement>(`[data-id="${CSS.escape(row)}"]`):station?markers.get(station)?.getElement():marker&&markerButton(marker))?.focus({preventScroll:true});
 }
+// ---- Phone sheet ----
+// From the map it opens at peek height, from the list at full height (it has no peek there: half a sheet over the
+// list looks like two lists). The handle switches peek and full; on the top bar a drag up goes full, a drag down
+// goes back to peek, or closes the sheet from peek or over the list (it follows the finger down).
+const handle=$('site-handle'),bar=$('site-bar');
+const inList=()=>!wide.matches&&mode==='list';
+function shrink() {if(panel.dataset.sheet==='full'&&!inList())setSheet('peek');else closePanel();}
+function setSheet(state:'peek'|'full') {
+  panel.dataset.sheet=state;
+  handle.setAttribute('aria-expanded',String(state==='full'));handle.setAttribute('aria-label',state==='full'?'Pomanjšaj':'Razširi');
+}
+handle.addEventListener('click',()=>panel.dataset.sheet==='full'?shrink():setSheet('full'));
+let dragStart:number|null=null;
+bar.addEventListener('touchstart',event=>{
+  const onButton=(event.target as Element).closest('button:not(#site-handle)');
+  dragStart=wide.matches||onButton?null:event.touches[0].clientY;
+},{passive:true});
+bar.addEventListener('touchmove',event=>{
+  if(dragStart===null)return;
+  const dy=event.touches[0].clientY-dragStart;
+  panel.style.transition='none';panel.style.transform=dy>0?`translateY(${dy}px)`:'';
+},{passive:true});
+bar.addEventListener('touchend',event=>{
+  if(dragStart===null)return;
+  const dy=event.changedTouches[0].clientY-dragStart;
+  dragStart=null;panel.style.transition='';panel.style.transform='';
+  if(dy<-40)setSheet('full');
+  else if(dy>40)shrink();
+});
 // detail is 0 when the button is activated from the keyboard.
 $('site-close').addEventListener('click',event=>closePanel(event.detail===0));
 // Clicking or tapping empty map closes the panel (not a marker; drags are not clicks).
@@ -537,6 +582,60 @@ $('site-charts').addEventListener('keydown',event=>{
 });
 addEventListener('resize',()=>{if(selected)renderHistory();});
 
+// ---- List ----
+// The open layer's stations as a list, by group (wind: region, Gorenjska first; rivers: river): first those in
+// view on the map, then, after a divider, the rest. Redrawn when the map moves. Wind rows are at the picked time like the arrows. Phones switch between map and list (#mode-toggle; the map stays under the
+// list); desktop shows the list as a column left of the map (index.astro). A row opens what its marker opens.
+const listItems=$('list-items');
+let mode=read<'map'|'list'>('mode','map');
+type ListRow=Row&{id:string;current:boolean;at:LngLatLike};
+function rows():ListRow[] {
+  if(layer!=='wind')return overlays[layer].items.map(({marker,row},i)=>({...row,id:`${layer}-${i}`,current:marker===openMarker,at:marker.getLngLat()}));
+  const now=viewTime??Date.now();
+  return stations.filter(s=>markers.has(s.id)).map(atViewTime).map(s=>{
+    const {stale,label}=freshness(s,now);
+    return {id:s.id,current:selected?.id===s.id,at:[s.location![1],s.location![0]] as [number,number],group:s.region,title:s.name,sub:`${sourceLabel[s.source]} · ${label}`,fade:stale,
+      icon:`<svg viewBox="-18 -18 36 36" width="26" height="26" class="overflow-visible" aria-hidden="true">${arrowShape(degrees[s.direction],windColor(s.avg),windColor(s.gust??s.avg))}</svg>`,
+      value:`${speed(s.avg)}<span class="font-normal text-zinc-500"> / ${speed(s.gust)} m/s</span>`};
+  });
+}
+// In view: on the free part of the map (freeArea).
+function inView(at:LngLatLike) {
+  const {x,y}=map.project(at),{left,right,top,bottom}=freeArea();
+  return x>=left&&x<=right&&y>=top&&y<=bottom;
+}
+function renderList() {
+  const all=rows().sort((a,b)=>a.title.localeCompare(b.title,'sl'));
+  const near=all.filter(row=>inView(row.at)),rest=all.filter(row=>!near.includes(row));
+  const byGroup=(rows:ListRow[])=>[...new Set(rows.map(row=>row.group))]
+    .sort((a,b)=>Number(b==='Gorenjska')-Number(a==='Gorenjska')||a.localeCompare(b,'sl'))
+    .map(group=>[group,rows.filter(row=>row.group===group)] as [string,ListRow[]]);
+  const section=([heading,rows]:[string,ListRow[]])=>`<li>${heading?`<h3 class="sticky top-0 z-10 border-b border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-500">${escape(heading)}</h3>`:''}<ul>${
+    rows.map(row=>`<li><button type="button" data-id="${escape(row.id)}" aria-current="${row.current}" class="flex min-h-12 w-full items-center gap-3 px-3 py-1.5 text-left hover:bg-zinc-50 aria-[current=true]:bg-brand/10">
+      <span class="grid size-7 shrink-0 place-items-center ${row.fade?'opacity-50':''}">${row.icon}</span>
+      <span class="min-w-0 flex-1"><span class="block truncate font-medium">${escape(row.title)}</span><span class="block truncate text-xs text-zinc-500">${escape(row.sub)}</span></span>
+      <span class="shrink-0 text-sm font-semibold tabular-nums ${row.fade?'opacity-50':''}">${row.value}</span></button></li>`).join('')}</ul></li>`;
+  const divider=near.length&&rest.length?'<li data-divider aria-hidden="true" class="h-2 border-y border-zinc-200 bg-zinc-100"></li>':'';
+  // Rows are redrawn on every update; keep keyboard focus on the same row.
+  const focused=listItems.contains(document.activeElement)?(document.activeElement as HTMLElement).dataset.id:undefined;
+  const empty=layer!=='wind'&&overlays[layer].task===null?overlays[layer].error:'Nalaganje…';
+  listItems.innerHTML=all.length?byGroup(near).map(section).join('')+divider+byGroup(rest).map(section).join('')
+    :`<li class="p-3 text-sm text-zinc-500">${empty}</li>`;
+  if(focused)listItems.querySelector<HTMLElement>(`[data-id="${CSS.escape(focused)}"]`)?.focus({preventScroll:true});
+}
+listItems.addEventListener('click',event=>{
+  const id=(event.target as Element).closest<HTMLElement>('[data-id]')?.dataset.id;
+  if(!id)return;
+  if(layer==='wind'){const station=stations.find(s=>s.id===id);if(station)pick(station);return;}
+  const item=overlays[layer].items[Number(id.slice(layer.length+1))];
+  if(!item)return;
+  markerButton(item.marker).click();
+});
+const showMode=()=>{page.dataset.mode=mode;};
+$('mode-toggle').addEventListener('click',()=>{mode=mode==='list'?'map':'list';save('mode',mode);showMode();});
+showMode();renderList();
+map.on('moveend',renderList);
+
 // ---- Site search ----
 // Matches without diacritics, so "kriska" finds "Kriška gora".
 const fold=(text:string)=>text.normalize('NFD').replace(/\p{M}/gu,'').toLocaleLowerCase('sl');
@@ -564,7 +663,6 @@ function showSearch(open:boolean) {
 searchToggle.addEventListener('click',()=>showSearch(!$('map-page').hasAttribute('data-search')));
 function pick(station:Station) {
   search.value='';search.blur();showSearch(false);
-  map.jumpTo({center:[station.location![1],station.location![0]],zoom:Math.max(map.getZoom(),11)});
   openSite(station.id);
 }
 search.addEventListener('input',()=>{active=0;renderResults();});

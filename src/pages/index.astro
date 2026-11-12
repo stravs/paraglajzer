@@ -34,49 +34,67 @@ const layers=[
   <!-- Header bar with the logo. Its search button opens the search box below it (data-search on #map-page): full
        width on phones, under the button on desktop. -->
   <!-- data-drawer (map.ts, setPanel): the open drawer's kind. On desktop it sets --drawer to the drawer's width, and the
-       controls below move left by it so the drawer doesn't cover them. -->
-  <div id="map-page" class="group contents md:data-[drawer=wind]:[--drawer:560px] md:data-[drawer=card]:[--drawer:24rem]">
+       controls below move left by it so the drawer doesn't cover them.
+       Desktop shows the station list as a left column (--list; the controls move right by it). data-mode (map.ts,
+       "List"): phones switch between map and list. -->
+  <div id="map-page" class="group contents md:data-[drawer=wind]:[--drawer:560px] md:data-[drawer=card]:[--drawer:24rem] md:[--list:20rem]">
   <Header page="Zemljevid" class="absolute inset-x-0 top-0 z-[700] shadow-md">
     <button id="search-toggle" type="button" aria-expanded="false" aria-controls="search-box" class="grid size-10 place-items-center rounded-lg text-white/90 hover:bg-white/10 hover:text-white aria-expanded:bg-white/15" aria-label="Išči postajo" title="Išči postajo"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg></button>
   </Header>
-  <!-- The Maptoolkit logo and the map credit are at the top, just under the 56 px header. Phones, from the bottom
-       edge up: the time slider (10–54 px, once shown) with the zoom buttons right of it (10–98 px), then the layer
-       column above the zoom buttons (from 106 px). On desktop the slider and layer bar are in the middle.
+  <!-- The Maptoolkit logo and the map credit are at the top, just under the 56 px header (phones: under the layer
+       tabs, 108 px). Phones: the map/list switch at the bottom (10–54 px); above it the zoom buttons on the right and
+       the time buttons on the left (from 62 px). On desktop the layer bar is in the middle.
        Control buttons are 44 px (finger size) instead of MapLibre's 29 px, with bigger icons. The markers'
        z-indexes stay inside their own container (isolate), so arrows never draw over the map controls.
        With the desktop drawer open, the zoom buttons and the map credit move left of it. -->
-  <div class="absolute inset-0 z-0"><div id="map" class="h-full w-full [&_.maplibregl-canvas-container]:isolate [&_.maplibregl-ctrl-top-left]:top-14! [&_.maplibregl-ctrl-top-right]:top-14! [&_:is(.maplibregl-ctrl-top-right,.maplibregl-ctrl-bottom-right)]:right-[var(--drawer,0px)]! [&_:is(.maplibregl-ctrl-top-right,.maplibregl-ctrl-bottom-right)]:transition-[right] [&_:is(.maplibregl-ctrl-top-right,.maplibregl-ctrl-bottom-right)]:duration-300 [&_.maplibregl-ctrl-group_button]:size-11! [&_.maplibregl-ctrl-group]:rounded-xl! [&_.maplibregl-ctrl-zoom-in_.maplibregl-ctrl-icon]:bg-[length:36px]! [&_.maplibregl-ctrl-zoom-out_.maplibregl-ctrl-icon]:bg-[length:36px]!" role="application" aria-label="Zemljevid postaj"></div></div>
+  <div class="absolute inset-0 z-0"><div id="map" class="h-full w-full [&_.maplibregl-canvas-container]:isolate [&_:is(.maplibregl-ctrl-top-left,.maplibregl-ctrl-top-right)]:top-[6.75rem]! md:[&_:is(.maplibregl-ctrl-top-left,.maplibregl-ctrl-top-right)]:top-14! [&_:is(.maplibregl-ctrl-top-right,.maplibregl-ctrl-bottom-right)]:right-[var(--drawer,0px)]! [&_:is(.maplibregl-ctrl-top-right,.maplibregl-ctrl-bottom-right)]:transition-[right] [&_:is(.maplibregl-ctrl-top-right,.maplibregl-ctrl-bottom-right)]:duration-300 [&_.maplibregl-ctrl-top-left]:left-[var(--list,0px)]! max-md:[&_.maplibregl-ctrl-bottom-right]:bottom-[52px]! [&_.maplibregl-ctrl-group_button]:size-11! [&_.maplibregl-ctrl-group]:rounded-xl! [&_.maplibregl-ctrl-zoom-in_.maplibregl-ctrl-icon]:bg-[length:36px]! [&_.maplibregl-ctrl-zoom-out_.maplibregl-ctrl-icon]:bg-[length:36px]!" role="application" aria-label="Zemljevid postaj"></div></div>
+  <!-- The open layer's list (map.ts, renderList): on phones in list mode over the map, under the layer tabs; on
+       desktop a left column. -->
+  <aside id="list" aria-label="Seznam postaj" class="absolute inset-x-0 top-[6.75rem] bottom-0 z-[610] hidden overflow-y-auto overscroll-contain bg-white pb-24 max-md:group-data-[mode=list]:block md:top-14 md:right-auto md:block md:w-80 md:border-r md:border-zinc-200 md:pb-4">
+    <ul id="list-items"></ul>
+  </aside>
   <!-- Search box with its results below; on desktop over the drawer. -->
-  <div id="search-box" class="absolute inset-x-2 top-16 z-[650] hidden md:z-[1100] flex-col gap-1 group-data-[search]:flex md:left-auto md:w-80">
+  <div id="search-box" class="absolute inset-x-2 top-[7.25rem] md:top-16 z-[650] hidden md:z-[1100] flex-col gap-1 group-data-[search]:flex md:left-auto md:w-80">
     <div class="flex rounded-xl bg-white shadow-md">
       <label for="site-search" class="sr-only">Išči postajo</label>
       <input id="site-search" type="search" placeholder="Išči postajo…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list" class="min-h-11 min-w-0 flex-1 rounded-xl bg-transparent px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-brand md:text-sm" />
     </div>
     <ul id="search-results" role="listbox" aria-label="Zadetki" hidden class="max-h-[50dvh] overflow-y-auto rounded-xl bg-white py-1 shadow-md md:max-h-80"></ul>
   </div>
-  <!-- Bottom: status and the time slider; on desktop above the layer bar, both centred left of the drawer. -->
-  <div class="absolute inset-x-2 bottom-2.5 z-[600] mx-auto flex max-w-md flex-col gap-2 max-md:right-[62px] md:right-[calc(var(--drawer,0px)+0.5rem)] md:bottom-24 md:transition-[right] md:duration-300">
+  <!-- Bottom: status and, on phones, the map/list switch at the very bottom (same spot in both modes; above the
+       list). On desktop above the layer bar, centred between the list and the drawer. -->
+  <div class="absolute inset-x-2 bottom-2.5 z-[620] mx-auto flex max-w-md flex-col gap-2 md:right-[calc(var(--drawer,0px)+0.5rem)] md:left-[calc(var(--list,0px)+0.5rem)] md:bottom-24 md:transition-[right] md:duration-300">
     <p id="map-status" role="status" class="mx-auto w-fit rounded bg-white/90 px-2 py-1 text-xs text-zinc-600 empty:hidden">Nalaganje…</p>
-    <!-- Rivers layer: what the flow dots mean (same colours as flowColor in map.ts). -->
-    <p id="river-legend" hidden class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-white px-3 py-2 text-xs text-zinc-700 shadow-md"><span class="font-medium text-zinc-900">Pretok</span><span class="flex items-center gap-1"><span class="size-2.5 rounded-full bg-amber-400"></span>mali</span><span class="flex items-center gap-1"><span class="size-2.5 rounded-full bg-sky-500"></span>običajni</span><span class="flex items-center gap-1"><span class="size-2.5 rounded-full bg-blue-800"></span>velik</span><span class="flex items-center gap-1"><span class="size-2.5 rounded-full bg-red-600"></span>opozorilni</span><span class="flex items-center gap-1"><span class="size-2.5 rounded-full bg-zinc-400"></span>ni ocene</span></p>
-    <!-- Time slider: arrows at an earlier time (the last few hours); hidden until there is history. See "Time slider" in map.ts. -->
-    <div id="time" hidden class="flex items-center gap-1 rounded-xl bg-white pr-3 shadow-md">
-      <button id="time-play" type="button" aria-pressed="false" class="grid size-11 shrink-0 place-items-center rounded-xl text-brand hover:text-brand-dark" aria-label="Predvajaj zadnje ure" title="Predvajaj zadnje ure"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></button>
-      <input id="time-slider" type="range" min="-180" max="0" step="10" value="0" aria-label="Čas na zemljevidu" class="min-w-0 flex-1 accent-brand" />
-      <output id="time-label" for="time-slider" class="w-24 shrink-0 text-right text-xs text-zinc-600 tabular-nums">zdaj</output>
-    </div>
+    <button id="mode-toggle" type="button" class="mx-auto flex min-h-11 w-40 items-center justify-center gap-2 rounded-full bg-brand px-5 font-semibold text-white shadow-lg hover:bg-brand-dark md:hidden">
+      <span class="contents group-data-[mode=list]:hidden"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>Seznam</span>
+      <span class="hidden group-data-[mode=list]:contents"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14"/></svg>Zemljevid</span>
+    </button>
   </div>
-  <!-- Layer bar: one layer at a time (map.ts, "Layers"). Phones: icons only, in a column above the zoom buttons,
-       in the same 44 px box style. Desktop: a row with names at the bottom, in the middle. -->
-  <nav id="layers" aria-label="Sloji" class="absolute z-[600] flex bg-white max-md:right-[10px] max-md:bottom-[106px] max-md:w-11 max-md:flex-col max-md:divide-y max-md:divide-zinc-200 max-md:overflow-hidden max-md:rounded-xl max-md:ring-2 max-md:ring-black/10 md:bottom-6 md:left-[calc((100%-var(--drawer,0px))/2)] md:transition-[left] md:duration-300 md:w-full md:max-w-md md:-translate-x-1/2 md:gap-1 md:rounded-2xl md:p-1.5 md:shadow-lg">
-    {layers.map(({id,name,title,path})=><button type="button" data-layer={id} aria-pressed="false" title={title} class="flex size-11 items-center justify-center text-xs font-medium text-zinc-600 hover:text-zinc-900 aria-pressed:bg-brand aria-pressed:text-white md:h-auto md:w-auto md:flex-1 md:flex-col md:gap-0.5 md:rounded-xl md:py-1.5">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={path}></svg><span class="max-md:sr-only">{name}</span></button>)}
+  <!-- Time buttons: arrows at an earlier time, the last few hours in 10-minute steps; hidden until there is history
+       (map.ts, "Time"). Bottom left, opposite the zoom buttons, in their 44 px box style: later, the time
+       shown, earlier. -->
+  <div id="time" hidden class="absolute bottom-[62px] left-[10px] z-[600] flex w-11 flex-col overflow-hidden rounded-xl bg-white ring-2 ring-black/10 max-md:group-data-[mode=list]:hidden md:bottom-2.5 md:left-[calc(var(--list,0px)+10px)]">
+    <button id="time-later" type="button" disabled aria-label="Kasneje" title="Kasneje" class="grid size-11 shrink-0 place-items-center text-zinc-700 hover:bg-zinc-50 hover:text-black disabled:text-zinc-300 disabled:hover:bg-transparent"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button>
+    <output id="time-label" class="grid h-11 place-items-center border-y border-zinc-200 text-[11px] font-semibold tabular-nums">zdaj</output>
+    <button id="time-earlier" type="button" aria-label="Prej" title="Prej" class="grid size-11 shrink-0 place-items-center text-zinc-700 hover:bg-zinc-50 hover:text-black disabled:text-zinc-300 disabled:hover:bg-transparent"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+  </div>
+  <!-- Rivers layer: what the flow dots mean (same colours as flowColor in map.ts), stacked bottom left where the
+       time buttons are on the wind layer. -->
+  <p id="river-legend" hidden class="absolute bottom-[62px] left-[10px] z-[600] flex flex-col gap-1 rounded-xl bg-white px-2.5 py-2 text-xs text-zinc-700 ring-2 ring-black/10 max-md:group-data-[mode=list]:hidden md:bottom-2.5 md:left-[calc(var(--list,0px)+10px)]"><span class="font-medium text-zinc-900">Pretok</span><span class="flex items-center gap-1"><span class="size-2.5 rounded-full bg-amber-400"></span>mali</span><span class="flex items-center gap-1"><span class="size-2.5 rounded-full bg-sky-500"></span>običajni</span><span class="flex items-center gap-1"><span class="size-2.5 rounded-full bg-blue-800"></span>velik</span><span class="flex items-center gap-1"><span class="size-2.5 rounded-full bg-red-600"></span>opozorilni</span><span class="flex items-center gap-1"><span class="size-2.5 rounded-full bg-zinc-400"></span>ni ocene</span></p>
+  <!-- Layer bar: one layer at a time (map.ts, "Layers"). Phones: tabs with names across the top, under the
+       header, in map and list mode (on the map hidden while the sheet is open). Desktop: a row with names at the bottom, in the middle between list and drawer,
+       narrow enough to stay clear of the zoom buttons. -->
+  <nav id="layers" aria-label="Sloji" class="absolute z-[615] flex bg-white max-md:group-data-[mode=map]:group-data-[drawer]:hidden max-md:inset-x-0 max-md:top-14 max-md:shadow-sm md:bottom-6 md:left-[calc(var(--list,0px)+(100%-var(--list,0px)-var(--drawer,0px))/2)] md:transition-[left] md:duration-300 md:w-[min(28rem,calc(100%-var(--list,0px)-var(--drawer,0px)-8rem))] md:-translate-x-1/2 md:gap-1 md:rounded-2xl md:p-1.5 md:shadow-lg">
+    {layers.map(({id,name,title,path})=><button type="button" data-layer={id} aria-pressed="false" title={title} class="flex h-13 flex-1 flex-col items-center justify-center gap-0.5 text-xs font-medium text-zinc-600 hover:text-zinc-900 aria-pressed:bg-brand aria-pressed:text-white md:h-auto md:rounded-xl md:py-1.5">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={path}></svg><span>{name}</span></button>)}
   </nav>
   <!-- Panel for whatever was tapped (a station, webcam or snow station): bottom sheet on phones (slides up); on
        desktop a drawer on the right under the header (slides in). Closed = invisible, faded and moved off; see
-       setPanel in map.ts. -->
-  <aside id="site" tabindex="-1" aria-labelledby="site-name" class="invisible opacity-0 max-md:translate-y-full md:translate-x-full transition-all duration-300 ease-out motion-reduce:transition-none outline-none absolute z-[1000] overflow-y-auto bg-white px-3 pb-6 max-md:inset-x-0 max-md:bottom-0 max-md:max-h-[70%] max-md:rounded-t-2xl max-md:shadow-[0_-4px_16px_rgb(0_0_0/0.15)] md:top-14 md:right-0 md:bottom-0 md:w-[560px] md:pb-4 md:shadow-[-4px_0_16px_rgb(0_0_0/0.15)]">
-    <div class="sticky top-0 z-10 -mx-3 flex items-start justify-between gap-2 border-b border-zinc-200 bg-white px-3 pt-3 pb-2">
+       setPanel in map.ts. The phone sheet has two heights (data-sheet, map.ts "Phone sheet"): peek (45 %, the map
+       stays usable) and full (up to the header); its handle and top bar switch them. -->
+  <aside id="site" tabindex="-1" aria-labelledby="site-name" data-sheet="peek" class="invisible opacity-0 max-md:translate-y-full md:translate-x-full transition-all duration-300 ease-out motion-reduce:transition-none outline-none absolute z-[1000] overflow-y-auto bg-white px-3 pb-6 max-md:inset-x-0 max-md:bottom-0 max-md:max-h-[45%] max-md:data-[sheet=full]:h-[calc(100%-3.5rem)] max-md:data-[sheet=full]:max-h-none max-md:rounded-t-2xl max-md:shadow-[0_-4px_16px_rgb(0_0_0/0.15)] md:top-14 md:right-0 md:bottom-0 md:w-[560px] md:pb-4 md:shadow-[-4px_0_16px_rgb(0_0_0/0.15)]">
+    <div id="site-bar" class="sticky top-0 z-10 -mx-3 flex items-start justify-between gap-2 border-b border-zinc-200 bg-white px-3 pt-3 pb-2 max-md:touch-none max-md:pt-5">
+      <button id="site-handle" type="button" aria-controls="site" aria-expanded="false" aria-label="Razširi" class="absolute inset-x-0 top-0 grid h-5 place-items-center md:hidden"><span class="h-1 w-10 rounded-full bg-zinc-300"></span></button>
       <div class="min-w-0">
         <h2 id="site-name" class="text-lg leading-snug font-semibold break-words"></h2>
         <p id="site-meta" class="text-[10px] text-zinc-500"></p>
